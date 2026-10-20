@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
+
+  test:
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python helpers (independent verifiers + local test TSA/PKI for the trust tests)
+        run: pip install blake3 jsonschema pyhanko
+      - name: Unit and integration tests (includes docs/usage-cli.md drift check and trust tests)
+        env:
+          RV_TEST_PYTHON: python
+        run: cargo test --workspace --locked
+      - name: Self-test of the hash implementations
+        run: cargo run --locked -q -p rv-pdfauth-cli -- self-test
+      - name: Sample run
+        shell: bash
+        run: cargo run --locked -q -p rv-pdfauth-cli -- scan -i examples/sample/evidence --hash sha256,blake3 --lang all --out ci-out --progress none --no-timestamp
+      - name: Cross-language verification (Python re-checks the chain, hashes and JSON schemas)
+        shell: bash
+        run: |
+          run=$(find ci-out/logs -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | tail -n 1)
+          python tests/verify_chain.py "ci-out/logs/$run"
+          python tests/validate_reports.py "ci-out/reports/$run"
+      - name: Real TSA smoke test (DigiCert; network-dependent, informative)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: bash
+        run: |
+          cargo run --locked -q -p rv-pdfauth-cli -- scan -i examples/sample/evidence --out tsa-out --progress none | tee tsa.txt
+          grep -q "timestamp: ok" tsa.txt
+          run=$(find tsa-out/logs -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | tail -n 1)
+          cargo run --locked -q -p rv-pdfauth-cli -- verify-log "tsa-out/logs/$run"
+      - name: Build release binaries (Windows)
+        if: runner.os == 'Windows'
+        run: cargo build --release --locked -p rv-pdfauth-cli -p rv-pdfauth-gui
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: rv-pdfauth-windows-x64-${{ github.sha }}
+          path: |
+            target/release/rv-pdfauth.exe
+            target/release/rv-pdfauth-gui.exe
+          retention-days: 14

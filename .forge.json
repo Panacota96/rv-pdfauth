@@ -1,0 +1,17 @@
+{
+  "forge_version": 1,
+  "profile": "rust",
+  "name": "rv-pdfauth",
+  "module": "rv_pdfauth",
+  "title": "RV PDFAuth",
+  "run_command": "analyze",
+  "created": "2026-10-21",
+  "cli_command": [
+    "cargo",
+    "run",
+    "-q",
+    "-p",
+    "rv-pdfauth-cli",
+    "--"
+  ]
+}

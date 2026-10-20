@@ -3,3 +3,6 @@
 /dist/
 *.pdb
 /examples/sample/out/
+
+# Claude Code agent worktrees (local only)
+.claude/

@@ -1,7 +1,7 @@
 //! The pipeline both front-ends call: intake → hash + analyze each item → duplicates →
 //! hashes.csv → per-item reports → statistics report. Every step is written to the audit log.
 
-use crate::analyzer::{Finding, Severity, analyze};
+use crate::analyzer::{Finding, Severity, analyze_item};
 use crate::audit::AuditLog;
 use crate::events::{Event, eta_ms};
 use crate::hash::{HashAlgo, hash_bytes, hash_reader, validate_selection};
@@ -40,6 +40,8 @@ pub struct RunConfig {
     pub sign_cert: Option<PathBuf>,
     /// Never logged.
     pub sign_password: Option<String>,
+    /// Tool-specific analysis options (rv-pdfauth: revisions, visual diff, worker limits…).
+    pub domain: crate::analyzer::DomainOptions,
 }
 
 impl Default for RunConfig {
@@ -62,6 +64,7 @@ impl Default for RunConfig {
             tsa_url: None,
             sign_cert: None,
             sign_password: None,
+            domain: crate::analyzer::DomainOptions::default(),
         }
     }
 }
@@ -272,6 +275,8 @@ pub fn run(
             extension: None,
             findings: vec![],
             error: None,
+            details: Value::Null,
+            outputs: vec![],
             audit_first_seq: first_seq,
             audit_last_seq: first_seq,
         };
@@ -301,12 +306,51 @@ pub fn run(
                     path: path_s.clone(),
                     hashes,
                 });
-                let a = analyze(&result.file_name(), out.bytes, &out.head);
+                // Second, read-only pass by the domain analysis (whole file, memory-mapped / in a worker):
+                // justified because PDF structure needs random access; logged as analysis_started.
+                let item_dir = report_dir.join("items").join(result.folder());
+                std::fs::create_dir_all(&item_dir).map_err(io)?;
+                log.record("analysis_started", Some(&path_s), json!({"index": item.index, "isolation": match &cfg.domain.isolation { crate::analyzer::Isolation::InProcess => "in_process", crate::analyzer::Isolation::Subprocess { .. } => "worker_process" }})).map_err(io)?;
+                let file_name = result.file_name();
+                let a = analyze_item(&crate::analyzer::AnalyzeCtx {
+                    path: &item.path,
+                    file_name: &file_name,
+                    size: out.bytes,
+                    head: &out.head,
+                    item_dir: &item_dir,
+                    opts: &cfg.domain,
+                });
+                for o in &a.outputs {
+                    let p = item_dir.join(&o.rel_path);
+                    let digests = std::fs::File::open(&p)
+                        .and_then(|f| hash_reader(f, &cfg.algorithms, &mut |_| true));
+                    match digests {
+                        Ok(Some(d)) => {
+                            let hashes: BTreeMap<String, String> = d
+                                .digests
+                                .iter()
+                                .map(|(a, h)| (a.name().to_string(), h.clone()))
+                                .collect();
+                            log.record("output_written", Some(&path_s), json!({"index": item.index, "kind": o.kind, "file": format!("items/{}/{}", result.folder(), o.rel_path), "bytes": d.bytes, "hashes": hashes})).map_err(io)?;
+                            result.outputs.push(crate::report::OutputRecord {
+                                rel_path: o.rel_path.clone(),
+                                kind: o.kind.clone(),
+                                bytes: d.bytes,
+                                hashes,
+                            });
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            log.record("output_missing", Some(&path_s), json!({"index": item.index, "kind": o.kind, "file": o.rel_path, "error": e.to_string()})).map_err(io)?;
+                        }
+                    }
+                }
                 result.size = out.bytes;
                 result.hashes = out.digests;
                 result.detected_type = a.detected_type;
                 result.extension = a.extension;
                 result.findings = a.findings;
+                result.details = a.details;
             }
             Err(e) => {
                 errors += 1;

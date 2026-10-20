@@ -363,6 +363,7 @@ fn scan(a: ScanArgs) -> u8 {
             .as_ref()
             .and_then(|_| password(&a.sign_pass_env)),
         sign_cert: a.sign_cert.clone(),
+        domain: rv_pdfauth_core::analyzer::DomainOptions::default(),
     };
 
     let bar = match a.progress {

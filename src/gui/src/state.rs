@@ -313,6 +313,7 @@ impl GuiState {
             } else {
                 Some(self.sign_password.clone())
             },
+            domain: rv_pdfauth_core::analyzer::DomainOptions::default(),
         })
     }
 

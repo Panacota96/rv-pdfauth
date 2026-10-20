@@ -3395,6 +3395,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rv-pdfauth-pdf"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "salsa20"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

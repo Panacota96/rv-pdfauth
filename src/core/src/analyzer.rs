@@ -51,11 +51,87 @@ impl Finding {
     }
 }
 
-#[derive(Clone, Debug, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, PartialEq)]
 pub struct Analysis {
     pub detected_type: Option<String>,
     pub extension: Option<String>,
     pub findings: Vec<Finding>,
+    /// Domain data for the technical report (rv-pdfauth: the `PdfReport` + visual-diff summary). Null if none.
+    pub details: serde_json::Value,
+    /// Files the analysis wrote under the item folder; the pipeline hashes and audits every one.
+    pub outputs: Vec<OutputFile>,
+}
+
+/// One file written by the analysis, relative to the item report folder (forward slashes).
+#[derive(Clone, Debug, Default, Serialize, serde::Deserialize, PartialEq)]
+pub struct OutputFile {
+    pub rel_path: String,
+    /// revision, visual_diff, objects_dump, embedded_file, embedded_image, page_render
+    pub kind: String,
+}
+
+/// How heavy analysis runs. Subprocess = `<exe> worker …` per item, so a crash in native code (PDFium) or a
+/// hang cannot stop a bulk run or corrupt the audit log; InProcess is for unit tests.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum Isolation {
+    #[default]
+    InProcess,
+    Subprocess {
+        exe: std::path::PathBuf,
+    },
+}
+
+/// Domain options (FROZEN names; the CLI flags and GUI settings map 1:1 onto them).
+#[derive(Clone, Debug, PartialEq)]
+pub struct DomainOptions {
+    pub extract_revisions: bool,
+    pub visual_diff: bool,
+    pub dpi: u32,
+    pub max_pages: u32,
+    pub objects_dump: bool,
+    pub extract_embedded: bool,
+    pub worker_timeout_s: u64,
+    pub worker_memory_mb: u64,
+    /// Extra fingerprint database (JSON) on top of the bundled starter DB and the local learned DB.
+    pub fingerprints_db: Option<std::path::PathBuf>,
+    /// Write item reports only for items with findings above info.
+    pub item_reports_flagged_only: bool,
+    pub isolation: Isolation,
+}
+
+impl Default for DomainOptions {
+    fn default() -> Self {
+        DomainOptions {
+            extract_revisions: true,
+            visual_diff: true,
+            dpi: 110,
+            max_pages: 50,
+            objects_dump: true,
+            extract_embedded: true,
+            worker_timeout_s: 120,
+            worker_memory_mb: 2048,
+            fingerprints_db: None,
+            item_reports_flagged_only: false,
+            isolation: Isolation::InProcess,
+        }
+    }
+}
+
+/// Everything the domain analysis gets for one item. `item_dir` exists and is empty; write outputs only there.
+pub struct AnalyzeCtx<'a> {
+    pub path: &'a std::path::Path,
+    pub file_name: &'a str,
+    pub size: u64,
+    /// First 4 KiB, already read during hashing.
+    pub head: &'a [u8],
+    pub item_dir: &'a std::path::Path,
+    pub opts: &'a DomainOptions,
+}
+
+/// FROZEN entry point called by run.rs for every readable item. The reference inventory logic below
+/// (`analyze`) stays as the fallback for non-PDF files; the PDF analysis replaces this body.
+pub fn analyze_item(ctx: &AnalyzeCtx) -> Analysis {
+    analyze(ctx.file_name, ctx.size, ctx.head)
 }
 
 struct Signature {
@@ -220,6 +296,7 @@ pub fn analyze(file_name: &str, size: u64, head: &[u8]) -> Analysis {
         detected_type: sig.map(|s| s.name.to_string()),
         extension,
         findings,
+        ..Analysis::default()
     }
 }
 

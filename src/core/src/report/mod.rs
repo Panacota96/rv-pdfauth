@@ -68,8 +68,20 @@ pub struct ItemResult {
     pub extension: Option<String>,
     pub findings: Vec<Finding>,
     pub error: Option<String>,
+    /// Domain data from the analysis (Analysis::details) and the files it wrote (with digests).
+    pub details: serde_json::Value,
+    pub outputs: Vec<OutputRecord>,
     pub audit_first_seq: u64,
     pub audit_last_seq: u64,
+}
+
+/// A file written by the analysis, after the pipeline hashed and audited it.
+#[derive(Clone, Debug, Default, serde::Serialize)]
+pub struct OutputRecord {
+    pub rel_path: String,
+    pub kind: String,
+    pub bytes: u64,
+    pub hashes: BTreeMap<String, String>,
 }
 
 impl ItemResult {

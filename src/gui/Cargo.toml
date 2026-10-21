@@ -19,6 +19,9 @@ path = "src/lib.rs"
 rv-pdfauth-core.workspace = true
 eframe.workspace = true
 serde_json.workspace = true
+# Revision viewer: decode the diff PNGs written by the core; dates on the timeline.
+png.workspace = true
+chrono.workspace = true
 
 # Native file/folder pickers on Windows (no GTK/portal dependency elsewhere: a text field is used instead).
 [target.'cfg(windows)'.dependencies]

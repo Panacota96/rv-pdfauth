@@ -11,7 +11,7 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("RV PDFAuth — Rakvor")
-            .with_inner_size([860.0, 720.0])
+            .with_inner_size([1100.0, 900.0])
             .with_min_inner_size([640.0, 520.0])
             .with_drag_and_drop(true),
         // wgpu falls back to a software adapter (WARP on Windows), so the GUI also runs on

@@ -94,6 +94,37 @@ stateDiagram-v2
 - Files are processed sequentially on purpose: the order of audit entries equals the order of work, which is
   easier to explain in court. Hashing is I/O-bound on typical evidence drives.
 
+## PDF analysis: worker isolation and visual diff
+
+```text
+run.rs ──► analyzer::analyze_item ── not a PDF ──► inventory analysis (in process)
+                    │ PDF (%PDF- or .pdf)
+                    ▼
+      worker::analyze_in_worker ── spawn `<exe> worker --in … --item-dir … --opts <json>`
+        limits first (Unix RLIMIT_AS + no core dump; Windows Job Object), then "RV-WORKER-GO" on stdin
+                    ▼
+      child: pdfscan::analyze_pdf ── mmap read-only ─► rv_pdfauth_pdf::analyze ─► outputs in the item folder
+                    │ one JSON reply on stdout {"protocol":"rv-pdfauth-worker/1","analysis":…}
+                    ▼
+      parent: validate outputs ─► run.rs hashes + audits each (output_written) ─► item_analyzed
+```
+
+- **Failure** (timeout `worker_timeout_s`, crash, `worker_memory_mb` exceeded, bad JSON) → `PARSER_FAILED`
+  (high, `reason`, `exit_code`) and `details.worker` with the stderr tail; the run continues with the next item.
+- **Crash outputs** are kept and listed as `partial_output`, so they are hashed and audited like every other
+  file the tool wrote; they support no finding. Files a successful worker did not list become
+  `unlisted_output`; listed paths outside the item folder are rejected.
+- **Outputs**: `revisions/rev-NN.pdf` (exact byte prefixes, only with >1 revision), `objects.json`,
+  `embedded/NN-<name>.<jpg|bin>` (+ `.inflated.*` for FlateDecode), `visual/rev-NN-vs-MM-page-PPP.png`.
+- **Visual diff** (`src/render`): consecutive revisions, pages present in both up to `max_pages`, rendered by
+  PDFium on the CPU at `dpi` (lowered for pages above 40 Mpx). A pixel changes when a channel differs by more
+  than 32/255 (anti-aliasing and colour rounding); changes are grouped on an 8 px grid, regions closer than
+  12 px merged, regions under 3 px dropped as noise, boxes padded by 4 px (max 100 per page). Changed pages give
+  a side-by-side PNG (boxes in violet on both halves) and `VISUAL_CHANGE_BETWEEN_REVISIONS` (medium); added or
+  removed pages are listed. Ratios are integer ppm or decimal strings — no floats in audited JSON.
+- **Audit**: `item_analyzed.details.analysis` records the fingerprint DBs used (role, name, version, SHA-256),
+  the PDFium library (path, SHA-256, pinned build), the worker outcome and the visual-diff status.
+
 ## Why Rust
 
 See [ADR 0001](adr/0001-language.md).

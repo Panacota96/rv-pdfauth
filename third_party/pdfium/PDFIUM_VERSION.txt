@@ -1,0 +1,9 @@
+# PDFium binary pinned for rv-pdfauth. Read by scripts/fetch_pdfium.sh and scripts/fetch_pdfium.ps1.
+# Source: https://github.com/bblanchon/pdfium-binaries (PDFium: BSD-3-Clause; build scripts: MIT).
+# The Rust bindings (pdfium-render feature below) must match this PDFium build number.
+# To upgrade: change tag + pdfium_render_feature, download each archive, record its SHA-256 here.
+tag=chromium/7881
+version=151.0.7881.0
+pdfium_render_feature=pdfium_7881
+sha256.linux-x64=1470e21b8b4a3b4ad7f85684e2da11d94f3b69a86d81dee11b9b6709d927ac1d
+sha256.win-x64=73cc0de638ac2095e7445bf56a38200a5b7c7ca0e9f4ba144598f2457377ac08

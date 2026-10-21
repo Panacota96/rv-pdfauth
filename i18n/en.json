@@ -108,6 +108,21 @@
       "title": "File could not be read",
       "shows": "Reading failed: %{error}.",
       "does_not_prove": "It does not show that the file is damaged; permissions or locks can cause this."
+    },
+    "PARSER_FAILED": {
+      "title": "PDF analysis did not complete",
+      "shows": "The isolated analysis of this file stopped before finishing (reason: %{reason}, exit code %{exit_code}). The file was hashed and its integrity record is complete; the PDF structure, revisions and visual comparison were not fully analysed.",
+      "does_not_prove": "It does not show that the file is malicious or forged: damaged, unusual or very large files can exhaust the time or memory limits. Re-run with higher limits or examine the file manually."
+    },
+    "VISUAL_CHANGE_BETWEEN_REVISIONS": {
+      "title": "Visible change between revisions",
+      "shows": "Rendering revision %{from_rev} and revision %{to_rev} gives different images on page(s) %{pages} (largest changed share %{changed_ratio_max}); pages added: %{pages_added}; pages removed: %{pages_removed}. The changed areas are outlined in the comparison images.",
+      "does_not_prove": "Incremental updates are normal when forms are filled, documents are signed or comments are added. It does not show who made the change, when, or with what intent."
+    },
+    "VISUAL_DIFF_SKIPPED": {
+      "title": "Visual comparison not performed",
+      "shows": "The page-by-page visual comparison of the revisions could not be made: %{reason}.",
+      "does_not_prove": "It does not show that the revisions look the same or differ; the structural analysis of the revisions is unaffected."
     }
   },
   "limitations": {

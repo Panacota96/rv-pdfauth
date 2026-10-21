@@ -34,6 +34,21 @@ spki.workspace = true
 const-oid.workspace = true
 rsa.workspace = true
 sha2-legacy.workspace = true
+rv-pdfauth-pdf.workspace = true
+rv-pdfauth-render.workspace = true
+memmap2.workspace = true
+flate2.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
+
+[features]
+# Use rv_pdfauth_pdf::starter_db() (bundled fingerprint DB) once the PDF layer provides it.
+# Off: an empty "starter" DB is recorded as unavailable (see src/fingerprints.rs).
+starter-db = []
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -14,6 +14,24 @@ cargo run -p rv-pdfauth-gui
 Linux needs no system packages to build. On Windows use the MSVC toolchain (`rustup default stable-msvc`);
 binaries are linked with the static C runtime (`.cargo/config.toml`), so they run on a clean Windows 10/11.
 
+### PDFium (visual diff)
+
+The renderer loads PDFium at run time; it is never linked and never committed. Fetch the pinned build (tag and
+SHA-256 in `third_party/pdfium/PDFIUM_VERSION.txt`; a digest mismatch aborts) and point the tests at it:
+
+```bash
+scripts/fetch_pdfium.sh                                   # -> third_party/pdfium/linux-x64/libpdfium.so
+export RV_PDFIUM_PATH="$PWD/third_party/pdfium/linux-x64/libpdfium.so"
+```
+
+On Windows: `.\scripts\fetch_pdfium.ps1` and `$env:RV_PDFIUM_PATH = "$PWD\third_party\pdfium\win-x64\pdfium.dll"`.
+Without it every test still passes: the PDFium tests print `skipping PDFium test …` and a run records the visual
+diff as skipped (`VISUAL_DIFF_SKIPPED`). Release packages put `pdfium.dll` next to the executables. To upgrade,
+change the tag, the matching `pdfium-render` feature (root `Cargo.toml`) and both digests together.
+
+`RV_WORKER_TEST_FAULT=crash|hang|oom` (and `RV_WORKER_TEST_TIMEOUT_S`) make the worker misbehave on purpose in
+**debug builds only** (`src/cli/tests/worker.rs`); release builds ignore them.
+
 ## Test pyramid
 
 ```mermaid

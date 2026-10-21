@@ -6,3 +6,5 @@
 
 # Claude Code agent worktrees (local only)
 .claude/
+# PDFium binaries fetched by scripts/fetch_pdfium.* (only PDFIUM_VERSION.txt is tracked)
+/third_party/pdfium/*/

@@ -4,7 +4,7 @@
   "name": "rv-pdfauth",
   "module": "rv_pdfauth",
   "title": "RV PDFAuth",
-  "run_command": "scan",
+  "run_command": "analyze",
   "created": "2026-10-21",
   "cli_command": [
     "cargo",

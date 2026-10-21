@@ -45,9 +45,14 @@
 {% for row in duplicate_rows %}<tr><td class="mono">{{ row.hash }}</td><td>{% for p in row.paths %}<div>{{ p }}</div>{% endfor %}</td></tr>{% endfor %}
 </table>{% else %}<p>{{ t.none }}</p>{% endif %}
 
+<h2>{{ t.pdf_overview }}</h2>
+<table><tr><th>{{ t.pdf_overview }}</th><th>{{ t.items }}</th></tr>
+{% for row in pdf_rows %}<tr><td>{{ row.label }}</td><td>{{ row.count }}</td></tr>{% endfor %}
+</table>
+
 <h2>{{ t.items }}</h2>
 <table><tr><th>#</th><th>{{ t.file }}</th><th>{{ t.size }}</th><th>{{ t.status }}</th><th>{{ t.findings }}</th></tr>
-{% for it in item_rows %}<tr><td>{{ it.index }}</td><td><a href="{{ it.link }}">{{ it.file_name }}</a></td><td>{{ it.size }}</td><td>{{ it.status_label }}</td><td>{{ it.finding_count }}</td></tr>{% endfor %}
+{% for it in item_rows %}<tr><td>{{ it.index }}</td><td>{% if it.has_reports %}<a href="{{ it.link }}">{{ it.file_name }}</a>{% else %}{{ it.file_name }} <span class="small">({{ t.report_not_written }})</span>{% endif %}</td><td>{{ it.size }}</td><td>{{ it.status_label }}</td><td>{{ it.finding_count }}</td></tr>{% endfor %}
 </table>
 
 <h2>{{ t.limitations }}</h2>

@@ -41,6 +41,13 @@ that it is pending).
 | Audit entries covering the item | | ✔ (`#first – #last`) | |
 | Limitations | ✔ | ✔ | |
 | Status and next step | | ✔ | ✔ |
+| PDF overview: PDFs with >1 revision, with signatures, with online-editor fingerprints | ✔ | | |
+| Revision history table (byte range, Info/XMP dates, producer, time since previous, objects added/changed/deleted, pages changed, signed by) + timeline | | ✔ | |
+| Signatures, fonts, producer fingerprints (DB name, version, SHA-256), visual comparison (thumbnails → PNG), extracted files with digests | | ✔ | |
+| Plain-language document history ("saved 3 times; last change 9 days after creation, with an online editor") | | | ✔ |
+
+With `--item-reports flagged`, items whose status is `ok` get no report folder files; they stay listed in the
+statistics report (`reports_written: false`) and the audit log records `item_reports_skipped`.
 
 ## Status and severity
 

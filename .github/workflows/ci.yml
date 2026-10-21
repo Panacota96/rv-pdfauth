@@ -84,7 +84,7 @@ jobs:
         run: |
           # The sample set contains high-severity findings by design: exit code 3 is the expected result.
           rc=0
-          cargo run --locked -q -p rv-pdfauth-cli -- scan -i examples/sample/evidence --hash sha256,blake3 --lang all --out ci-out --progress none --no-timestamp || rc=$?
+          cargo run --locked -q -p rv-pdfauth-cli -- analyze -i examples/sample/evidence --hash sha256,blake3 --lang all --out ci-out --progress none --no-timestamp || rc=$?
           test "$rc" -eq 3
       - name: Cross-language verification (Python re-checks the chain, hashes and JSON schemas)
         shell: bash
@@ -97,7 +97,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          cargo run --locked -q -p rv-pdfauth-cli -- scan -i examples/sample/evidence --out tsa-out --progress none > tsa.txt || test $? -eq 3
+          cargo run --locked -q -p rv-pdfauth-cli -- analyze -i examples/sample/evidence --out tsa-out --progress none > tsa.txt || test $? -eq 3
           cat tsa.txt
           grep -q "timestamp: ok" tsa.txt
           run=$(find tsa-out/logs -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | tail -n 1)

@@ -24,7 +24,7 @@ Python's `hashlib` and `blake3`, so you can check the tool's output.
 ```mermaid
 flowchart LR
     G["tests/make_samples.py"] --> E["evidence/ (7 PDFs)"]
-    E --> S["rv-pdfauth scan --hash sha256,md5 --lang all"]
+    E --> S["rv-pdfauth analyze --hash sha256,md5 --lang all"]
     S --> O["out/logs/RUN-ID · out/reports/RUN-ID"]
     O --> V["rv-pdfauth verify-log → OK"]
     O --> C["compare with expected_hashes.csv"]

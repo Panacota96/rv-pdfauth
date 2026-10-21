@@ -3417,6 +3417,7 @@ dependencies = [
  "indicatif",
  "predicates",
  "rv-pdfauth-core",
+ "rv-pdfauth-pdf",
  "serde_json",
  "tempfile",
 ]

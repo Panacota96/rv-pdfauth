@@ -165,6 +165,54 @@
           }
         }
       }
+    },
+    "history": {
+      "description": "Plain-language document history (null for items that are not analysed PDFs).",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "saves",
+        "text"
+      ],
+      "properties": {
+        "saves": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "last_change_after_s": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "tool_category": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tool_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "en",
+              "es",
+              "fr"
+            ]
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
     }
   }
 }

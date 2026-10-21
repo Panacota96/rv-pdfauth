@@ -33,6 +33,52 @@
   <div class="kv"><div>{{ t.shows }}</div><div>{{ f.shows }}</div><div>{{ t.does_not_prove }}</div><div>{{ f.does_not_prove }}</div></div>
 </div>{% endfor %}{% else %}<p>{{ t.none }}</p>{% endif %}
 
+{% if pdf %}
+<h2>{{ t.revision_history }}</h2>
+<div class="scroll"><table class="dense"><tr><th>#</th><th>{{ t.byte_range }}</th><th>{{ t.saved_at_info }}</th><th>{{ t.saved_at_xmp }}</th><th>{{ t.producer }}</th><th>{{ t.since_previous }}</th><th>{{ t.objects_acd }}</th><th>{{ t.pages_changed }}</th><th>{{ t.signed_by_field }}</th></tr>
+{% for r in pdf.revision_rows %}<tr><td>{{ r.index }}</td><td class="mono">{{ r.byte_range }}</td><td>{{ r.saved_info }}</td><td>{{ r.saved_xmp }}</td><td>{{ r.producer }}</td><td>{{ r.since }}</td><td>{{ r.objects }}</td><td>{{ r.pages }}</td><td>{{ r.signed_by }}</td></tr>{% endfor %}
+</table></div>
+
+<h3>{{ t.timeline }}</h3>
+<div class="timeline" role="img" aria-label="{{ t.timeline }}"><div class="tl-axis"></div>
+{% for e in pdf.timeline %}<div class="tl-pt{% if e.up %} tl-up{% endif %}" style="left: {{ e.pos }}%"><span class="tl-dot"></span><span class="tl-lbl"><strong>R{{ e.index }}</strong><br>{{ e.date }}<br>{{ e.since }}</span></div>{% endfor %}
+</div>
+<p class="small">{{ t.timeline_note }}</p>
+
+<h2>{{ t.signatures }}</h2>
+{% if pdf.signature_rows %}<div class="scroll"><table class="dense"><tr><th>{{ t.sig_field }}</th><th>{{ t.sig_signer }}</th><th>{{ t.sig_time }}</th><th>{{ t.sig_revision }}</th><th>{{ t.sig_covers }}</th><th>{{ t.sig_digest }}</th><th>{{ t.sig_valid }}</th><th>{{ t.sig_docmdp }}</th><th>{{ t.sig_later }}</th></tr>
+{% for s in pdf.signature_rows %}<tr><td>{{ s.field }}</td><td>{{ s.signer }}</td><td>{{ s.time }}</td><td>{{ s.revision }}</td><td>{{ s.covers }}</td><td>{{ s.digest }}</td><td>{{ s.valid }}</td><td>{{ s.docmdp }}</td><td>{{ s.later }}</td></tr>{% endfor %}
+</table></div>{% else %}<p>{{ t.none }}</p>{% endif %}
+<p class="small">{{ t.sig_trust_note }}</p>
+
+<h2>{{ t.fonts }}</h2>
+{% if pdf.font_rows %}<table class="dense"><tr><th>{{ t.font_name }}</th><th>{{ t.font_subset }}</th><th>{{ t.font_embedded }}</th><th>{{ t.font_first_rev }}</th><th>{{ t.font_object }}</th></tr>
+{% for f in pdf.font_rows %}<tr><td>{{ f.name }}</td><td class="mono">{{ f.subset }}</td><td>{{ f.embedded }}</td><td>{{ f.first_revision }}</td><td class="mono">{{ f.object }}</td></tr>{% endfor %}
+</table>{% else %}<p>{{ t.none }}</p>{% endif %}
+
+<h2>{{ t.producer_fingerprints }}</h2>
+<div class="scroll"><table class="dense"><tr><th>{{ t.fp_role }}</th><th>{{ t.fp_db }}</th><th>{{ t.fp_version }}</th><th>{{ t.fp_entries }}</th><th>{{ t.fp_status }}</th><th>SHA-256</th></tr>
+{% for d in pdf.db_rows %}<tr><td>{{ d.role }}</td><td>{{ d.name }}</td><td>{{ d.version }}</td><td>{{ d.entries }}</td><td>{{ d.status }}</td><td class="mono">{{ d.sha256 }}</td></tr>{% endfor %}
+</table></div>
+{% if pdf.match_rows %}<div class="scroll"><table class="dense"><tr><th>#</th><th>{{ t.fp_label }}</th><th>{{ t.fp_category }}</th><th>{{ t.fp_matched_on }}</th><th>{{ t.fp_value }}</th><th>{{ t.fp_mismatch }}</th></tr>
+{% for m in pdf.match_rows %}<tr><td>{{ m.revision }}</td><td>{{ m.label }}</td><td>{{ m.category }}</td><td>{{ m.matched_on }}</td><td>{{ m.value }}</td><td>{{ m.mismatches }}</td></tr>{% endfor %}
+</table></div>{% else %}<p>{{ t.fp_no_match }}</p>{% endif %}
+
+<h2>{{ t.visual_comparison }}</h2>
+<div class="kv">
+  <div>{{ t.status }}</div><div>{{ pdf.visual.status_label }}</div>
+  {% if pdf.visual.reason %}<div>{{ t.reason }}</div><div>{{ pdf.visual.reason }}</div>{% endif %}
+  <div>{{ t.pages_changed }}</div><div>{{ pdf.visual.pages_changed }}</div>
+</div>
+{% if pdf.visual.images %}<div class="thumbs">{% for i in pdf.visual.images %}<a href="{{ i.href }}"><img src="{{ i.href }}" alt="{{ i.name }}" loading="lazy"><span class="mono">{{ i.name }}</span></a>{% endfor %}</div>
+{% else %}<p>{{ t.visual_none }}</p>{% endif %}
+{% endif %}
+
+{% if extracted %}<h2>{{ t.extracted_files }}</h2>
+<div class="scroll"><table class="dense"><tr><th>{{ t.file }}</th><th>{{ t.fp_category }}</th><th>{{ t.bytes }}</th><th>{{ t.hashes }}</th></tr>
+{% for e in extracted %}<tr><td class="mono"><a href="{{ e.href }}">{{ e.href }}</a></td><td>{{ e.kind }}</td><td>{{ e.bytes }}</td><td class="mono">{% for d in e.digests %}<div>{{ d }}</div>{% endfor %}</td></tr>{% endfor %}
+</table></div>{% endif %}
+
 <h2>{{ t.method }}</h2>
 <p>{{ t.method_text }}</p>
 

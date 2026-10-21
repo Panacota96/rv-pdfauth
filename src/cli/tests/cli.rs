@@ -56,7 +56,7 @@ fn only_dir(p: &Path) -> PathBuf {
 
 #[test]
 fn help_has_every_required_section() {
-    let out = bin().args(["scan", "--help"]).output().unwrap();
+    let out = bin().args(["analyze", "--help"]).output().unwrap();
     let text = String::from_utf8(out.stdout).unwrap();
     for section in [
         "DESCRIPTION:",
@@ -95,7 +95,7 @@ fn help_has_every_required_section() {
 #[test]
 fn three_hash_algorithms_are_a_usage_error() {
     bin()
-        .args(["scan", "-i", "."])
+        .args(["analyze", "-i", "."])
         .args(["--hash", "md5,sha1,sha256"])
         .assert()
         .code(2)
@@ -105,11 +105,11 @@ fn three_hash_algorithms_are_a_usage_error() {
 #[test]
 fn unknown_language_and_algorithm_are_usage_errors() {
     bin()
-        .args(["scan", "-i", ".", "--lang", "de"])
+        .args(["analyze", "-i", ".", "--lang", "de"])
         .assert()
         .code(2);
     bin()
-        .args(["scan", "-i", ".", "--hash", "crc32"])
+        .args(["analyze", "-i", ".", "--hash", "crc32"])
         .assert()
         .code(2);
 }
@@ -118,7 +118,7 @@ fn unknown_language_and_algorithm_are_usage_errors() {
 fn missing_input_is_a_runtime_error_and_is_audited() {
     let out = tempfile::tempdir().unwrap();
     bin()
-        .args(["scan", "-i", "does-not-exist", "-o"])
+        .args(["analyze", "-i", "does-not-exist", "-o"])
         .arg(out.path())
         .args(["--progress", "none"])
         .assert()
@@ -132,7 +132,7 @@ fn missing_input_is_a_runtime_error_and_is_audited() {
 fn bulk_scan_writes_reports_logs_and_verifiable_chain() {
     let out = tempfile::tempdir().unwrap();
     bin()
-        .args(["scan", "-i"])
+        .args(["analyze", "-i"])
         .arg(sample())
         .args([
             "--hash",
@@ -203,7 +203,7 @@ fn bulk_scan_writes_reports_logs_and_verifiable_chain() {
 fn jsonl_progress_is_one_event_per_line_with_elapsed_time() {
     let out = tempfile::tempdir().unwrap();
     let o = bin()
-        .args(["scan", "-i"])
+        .args(["analyze", "-i"])
         .arg(sample())
         .args(["--progress", "jsonl", "-o"])
         .arg(out.path())
@@ -235,7 +235,7 @@ fn evidence_is_not_modified() {
     let before = std::fs::metadata(&f).unwrap().modified().unwrap();
     let out = tempfile::tempdir().unwrap();
     bin()
-        .args(["scan", "-i"])
+        .args(["analyze", "-i"])
         .arg(&f)
         .args(["--progress", "none", "-o"])
         .arg(out.path())
@@ -251,7 +251,7 @@ fn executable_under_another_name_exits_3() {
     std::fs::write(ev.path().join("invoice.pdf"), b"MZ\x90\x00\x03\x00\x00\x00").unwrap();
     let out = tempfile::tempdir().unwrap();
     bin()
-        .args(["scan", "-i"])
+        .args(["analyze", "-i"])
         .arg(ev.path())
         .args(["--progress", "none", "-o"])
         .arg(out.path())
@@ -290,7 +290,7 @@ fn trust_timestamp_signature_and_custody_with_test_pki() {
         .env_remove("RV_NO_TIMESTAMP")
         .env("NO_PROXY", "127.0.0.1")
         .env("RV_SIGN_PASSWORD", "test")
-        .args(["scan", "-i"])
+        .args(["analyze", "-i"])
         .arg(sample())
         .args([
             "--jurisdiction",
@@ -340,7 +340,7 @@ fn trust_timestamp_signature_and_custody_with_test_pki() {
     let out2 = tempfile::tempdir().unwrap();
     bin()
         .env_remove("RV_NO_TIMESTAMP")
-        .args(["scan", "-i"])
+        .args(["analyze", "-i"])
         .arg(sample())
         .args([
             "--tsa-url",

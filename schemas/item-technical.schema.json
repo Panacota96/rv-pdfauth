@@ -265,6 +265,412 @@
           "type": "integer"
         }
       }
+    },
+    "pdf": {
+      "description": "PDF analysis (null when the item is not a PDF or its analysis did not complete).",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "revisions",
+        "signatures",
+        "fonts",
+        "fingerprint_dbs",
+        "fingerprint_matches",
+        "visual"
+      ],
+      "properties": {
+        "revision_source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "page_count": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "encrypted": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "revisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "index",
+              "start_offset",
+              "end_offset",
+              "bytes",
+              "objects_added",
+              "objects_changed",
+              "objects_deleted",
+              "pages_changed",
+              "signed_by"
+            ],
+            "properties": {
+              "index": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "start_offset": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "end_offset": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "saved_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "saved_at_info": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "saved_at_xmp": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "since_previous_s": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "producer": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "creator": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "objects_added": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "objects_changed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "objects_deleted": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "pages_changed": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "signed_by": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "change_kind": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "xref_kind": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "signatures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "field"
+            ],
+            "properties": {
+              "field": {
+                "type": "string"
+              },
+              "signer_subject": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "signing_time": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sub_filter": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "revision": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "covers_revision": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "digest_ok": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "signature_ok": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "docmdp": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "later_revisions": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "fonts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "embedded": {
+                "type": "boolean"
+              },
+              "first_revision": {
+                "type": "integer"
+              },
+              "object": {
+                "type": "string"
+              },
+              "subset_prefix": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "fingerprint_dbs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "role",
+              "status"
+            ],
+            "properties": {
+              "role": {
+                "enum": [
+                  "starter",
+                  "local",
+                  "extra"
+                ]
+              },
+              "status": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "entries": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "path": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "fingerprint_matches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "revision",
+              "db",
+              "entry_id",
+              "category",
+              "matched_on"
+            ],
+            "properties": {
+              "revision": {
+                "type": "integer"
+              },
+              "db": {
+                "type": "string"
+              },
+              "entry_id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "matched_on": {
+                "type": "string"
+              },
+              "matched_value": {
+                "type": "string"
+              },
+              "trait_mismatches": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "visual": {
+          "type": "object",
+          "required": [
+            "images"
+          ],
+          "properties": {
+            "status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "reason": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "pairs_compared": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "pages_changed": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "dpi": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "images": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^visual/"
+              }
+            }
+          }
+        }
+      }
+    },
+    "extracted_files": {
+      "description": "Every file the analysis wrote in the item folder, with its digests (also in the audit log).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "rel_path",
+          "kind",
+          "bytes",
+          "hashes"
+        ],
+        "properties": {
+          "rel_path": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "hashes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{32,128}$"
+            }
+          }
+        }
+      }
     }
   }
 }

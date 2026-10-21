@@ -13,3 +13,4 @@ __pycache__/
 .claude/
 # PDFium binaries fetched by scripts/fetch_pdfium.* (only PDFIUM_VERSION.txt is tracked)
 /third_party/pdfium/*/
+/fuzz/Cargo.lock

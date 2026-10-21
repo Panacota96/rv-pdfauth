@@ -1180,7 +1180,12 @@ mod tests {
         assert!(parse_evidence_ids(&["7".into()]).is_err());
         assert_eq!(evidence_id(12345), "E12345");
         let p = normalize_path(Path::new("/x/y/../z/./f.txt"));
-        assert!(p.ends_with("z/f.txt") && !p.contains(".."), "{}", p);
+        // Separator is "\\" on Windows: compare path components, not text.
+        assert!(
+            Path::new(&p).ends_with(Path::new("z").join("f.txt")) && !p.contains(".."),
+            "{}",
+            p
+        );
         assert!(same_path("/x/a.pdf", "/x/a.pdf"));
         assert_eq!(same_path("/x/A.pdf", "/x/a.pdf"), cfg!(windows));
         let mut exp = BTreeMap::new();

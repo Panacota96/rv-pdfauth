@@ -32,6 +32,14 @@ change the tag, the matching `pdfium-render` feature (root `Cargo.toml`) and bot
 `RV_WORKER_TEST_FAULT=crash|hang|oom` (and `RV_WORKER_TEST_TIMEOUT_S`) make the worker misbehave on purpose in
 **debug builds only** (`src/cli/tests/worker.rs`); release builds ignore them.
 
+### Documentation figures and oracles
+
+The figures of [theory.md](theory.md) are generated from the synthetic samples by
+`python tests/make_theory_figures.py` (SVG byte maps, standard library only) and
+`python tests/make_theory_figures.py --bin target/release/rv-pdfauth` (also the visual-diff PNG; needs PDFium and
+Pillow). The independent PDF oracles run with `python tests/oracle_pdf.py` (pikepdf/qpdf, pyHanko; not in CI yet).
+Mermaid blocks are checked with `npx -y @mermaid-js/mermaid-cli@11 -i <block.mmd> -o <out.svg>`.
+
 ## Test pyramid
 
 ```mermaid

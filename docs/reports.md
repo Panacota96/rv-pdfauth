@@ -46,8 +46,9 @@ that it is pending).
 | Signatures, fonts, producer fingerprints (DB name, version, SHA-256), visual comparison (thumbnails → PNG), extracted files with digests | | ✔ | |
 | Plain-language document history ("saved 3 times; last change 9 days after creation, with an online editor") | | | ✔ |
 
-With `--item-reports flagged`, items whose status is `ok` get no report folder files; they stay listed in the
-statistics report (`reports_written: false`) and the audit log records `item_reports_skipped`.
+With `--item-reports flagged`, items whose status is `ok` get no technical, summary or custody files; their
+derived outputs (e.g. `objects.json`) are still written and audited. They stay listed in the statistics report
+(`reports_written: false`) and the audit log records `item_reports_skipped`.
 
 ## Status and severity
 
@@ -61,20 +62,52 @@ pie showData
 
 | Severity | Examples | Item status |
 | --- | --- | --- |
-| High | UNREADABLE, EXECUTABLE_CONTENT | `problem` (exit code 3) |
-| Medium | EXTENSION_MISMATCH | `attention` |
-| Low | — | `attention` |
-| Informational | EMPTY_FILE, DUPLICATE | `ok` |
+| High | CONTENT_CHANGED_AFTER_SIGNATURE, SIGNATURE_INTEGRITY_FAILED, PARSER_FAILED, UNREADABLE | `problem` (exit code 3) |
+| Medium | VISUAL_CHANGE_BETWEEN_REVISIONS, METADATA_INFO_XMP_MISMATCH, EXTENSION_MISMATCH | `attention` |
+| Low | INCREMENTAL_UPDATES, HYBRID_XREF, EMBEDDED_FILES | `attention` |
+| Informational | REVISION_TIME_GAP, SIGNATURE_PRESENT_TRUST_NOT_VERIFIED, DUPLICATE | `ok` |
 
 ## Findings catalogue
 
-| Code | Shows | Does not prove |
-| --- | --- | --- |
-| `EMPTY_FILE` | The file has 0 bytes | Whether it was emptied on purpose |
-| `EXTENSION_MISMATCH` | Name and content signature disagree | Intent to hide anything |
-| `EXECUTABLE_CONTENT` | A program is stored under a non-program name | That the program is malicious |
-| `DUPLICATE` | Identical content (same primary hash) in several files | Who copied it or when |
-| `UNREADABLE` | Reading failed, with the OS error | That the file is damaged |
+Every code, its severity, and the rule behind it. The full *shows / does not prove* wording is in
+`i18n/en.json` (es, fr); what to check next and what not to conclude: [usage.md](usage.md#5-interpreting-each-finding);
+the exact rules and thresholds: [theory.md](theory.md).
+
+| Code | Severity | Raised when |
+| --- | :-: | --- |
+| `EMPTY_FILE` | info | the file has 0 bytes |
+| `EXTENSION_MISMATCH` | medium | name and content signature disagree |
+| `EXECUTABLE_CONTENT` | high | a program is stored under a non-program name |
+| `DUPLICATE` | info | identical content (primary hash) in several files |
+| `UNREADABLE` | high | reading failed (OS error) |
+| `NOT_A_PDF` | info | a `.pdf` name without `%PDF-` in the first 1024 bytes |
+| `PARSER_FAILED` | high | the isolated PDF analysis did not complete (timeout, memory, crash, bad output) |
+| `ENCRYPTED_PARTIAL_ANALYSIS` | info | the PDF is encrypted; content checks skipped |
+| `INCREMENTAL_UPDATES` | low | more than one revision |
+| `VISUAL_CHANGE_BETWEEN_REVISIONS` | medium | rendered pages of consecutive revisions differ, or pages were added/removed |
+| `VISUAL_DIFF_SKIPPED` | info | the visual comparison could not run (reason given) |
+| `METADATA_INFO_XMP_MISMATCH` | medium | Info and XMP disagree on producer, creator or dates (final revision) |
+| `MODDATE_BEFORE_CREATIONDATE` | high | a modification date earlier than the creation date (Info or XMP) |
+| `REVISION_TIME_GAP` | info | consecutive revisions dated at least 1 hour apart |
+| `PRODUCER_CHANGED_BETWEEN_REVISIONS` | medium | the Info producer changes between consecutive revisions |
+| `EDITOR_FINGERPRINT` | medium | a revision was saved by a known PDF editor |
+| `ONLINE_EDITOR_OR_UNLOCKER` | high | a revision was saved by an online editor or protection-removal tool |
+| `PRODUCER_STRUCTURE_MISMATCH` | medium | the structure differs from what the declared producer writes |
+| `UNKNOWN_PRODUCER` | info | a producer string not in the databases used |
+| `XREF_OFFSETS_INCONSISTENT` | medium | cross-reference data does not point at its objects, or startxref is wrong |
+| `HYBRID_XREF` | low | a classic xref table plus an `/XRefStm` stream |
+| `DATA_AFTER_FINAL_EOF` | medium | non-whitespace bytes after the last `%%EOF` |
+| `SIGNATURE_INTEGRITY_FAILED` | high | digest mismatch, invalid signature value or a ByteRange not covering exactly one revision |
+| `SIGNATURE_PRESENT_TRUST_NOT_VERIFIED` | info | every signature (trust is never validated) |
+| `CONTENT_CHANGED_AFTER_SIGNATURE` | high | a later revision changes page content or structure |
+| `DOCMDP_VIOLATION` | high | later changes exceed the certification permission level |
+| `JAVASCRIPT_PRESENT` | medium | JavaScript actions or name tree |
+| `LAUNCH_ACTION` | high | a `/Launch` action |
+| `EMBEDDED_FILES` | low | attachments |
+| `INVISIBLE_TEXT` | medium | text drawn invisibly on a page (render mode 3/7, white or transparent fill) |
+| `TEXT_OVER_SCANNED_IMAGE` | medium | a page mostly covered by one image also contains text |
+| `FONT_ADDED_IN_LATER_REVISION` | medium | a font first appears in a later revision and is used by page content |
+| `SCANNED_PAGES_STRUCTURE_ONLY` | info | pages that are a single large image without text |
 
 Wording lives in `i18n/en.json`, `es.json`, `fr.json` (same keys in all three — enforced by a test).
 

@@ -11,11 +11,13 @@
 ```mermaid
 flowchart LR
     A[/"File, folder<br/>or list"/] --> B["Hash<br/>1–2 algorithms, one read"]
-    B --> C["Detect real type<br/>(signatures)"]
-    C --> D["Findings<br/>mismatch · executable · empty · duplicate"]
+    B --> W["Isolated worker<br/>per PDF"]
+    W --> C["Revisions<br/>byte-exact prefixes"]
+    C --> V["Visual diff<br/>PDFium, boxes"]
+    W --> M["Metadata · fingerprints<br/>fonts · signatures · content"]
+    V & M --> D["Findings<br/>shows / does not prove"]
     D --> E[["Reports<br/>statistics + per item"]]
-    B -.-> L[("Audit log<br/>hash-chained")]
-    C -.-> L
+    B -.-> L[("Audit log<br/>hash-chained, timestamped")]
     D -.-> L
     E -.-> L
 ```
@@ -35,6 +37,7 @@ flowchart LR
 | | |
 | --- | --- |
 | **Two ways to use it** | `rv-pdfauth` (command line) and `rv-pdfauth-gui` (Windows 10/11 desktop app). Same engine, same results. |
+| **PDF analysis** | Every saved revision extracted byte-exact, pages of consecutive revisions compared visually (PDFium), Info vs XMP metadata and dates, producer/editor fingerprints, fonts, signatures and DocMDP, JavaScript, attachments, invisible text — each PDF in an isolated worker process. How it works: [docs/theory.md](docs/theory.md). |
 | **Single or bulk** | One file, many files, whole folders (`--recursive`) or a list file (`--input-list`). |
 | **Hashing** | Choose 1 or 2 of md5, sha1, sha256, sha512, sha3-256, blake3. Both are computed in the same read. |
 | **Progress** | Progress bar, elapsed time, throughput and estimated time remaining (CLI and GUI). Cancel at any time. |
@@ -48,9 +51,10 @@ flowchart LR
 - `rv-pdfauth-<version>-windows-x64-setup.exe` — installer (Start-menu shortcut, adds the CLI to PATH), or
 - `rv-pdfauth-<version>-windows-x64.zip` — portable: unzip and run, nothing is installed.
 
-Check the download before use (see [SECURITY.md](SECURITY.md#verifying-a-release)).
+Check the download before use: SHA-256, provenance attestation, Authenticode and the PDFium library, step by
+step in [docs/installation.md](docs/installation.md) (summary in [SECURITY.md](SECURITY.md#verifying-a-release)).
 
-**From source** (any OS, Rust 1.85+):
+**From source** (any OS, Rust 1.88+; auditors: [docs/installation.md](docs/installation.md#9-build-from-source-for-auditors)):
 
 ```bash
 cargo build --release
@@ -119,6 +123,10 @@ flowchart TB
 
 | Page | For |
 | --- | --- |
+| [docs/theory.md](docs/theory.md) | Why each process works: plain-language part for clients, lawyers and judges; algorithms, thresholds and references for examiners and opposing experts |
+| [docs/admissibility.md](docs/admissibility.md) | Reliability argument and requirements of Colombia, France/EU, ISO and US/UK mapped to tool features, gap list, examiner checklist (for counsel review) |
+| [docs/installation.md](docs/installation.md) | Installing on Windows 10/11, verifying the release (SHA-256, provenance, Authenticode, PDFium), offline use, building from source |
+| [docs/usage.md](docs/usage.md) | End-to-end case walkthrough, reading the outputs, interpreting each finding, timestamps, signing, verifying a run, troubleshooting |
 | [docs/usage-cli.md](docs/usage-cli.md) | Every command and option (generated from `--help`) |
 | [docs/usage-gui.md](docs/usage-gui.md) | Using the desktop app |
 | [docs/architecture.md](docs/architecture.md) | How the engine, CLI and GUI fit together |
@@ -132,7 +140,9 @@ flowchart TB
 ```text
 rv-pdfauth/
 ├── src/
-│   ├── core/      engine library: input, hashing, analysis, audit log, reports (never prints)
+│   ├── pdf/       PDF parser and findings (no unsafe code, never writes files)
+│   ├── render/    PDFium rendering and pixel diff
+│   ├── core/      engine library: input, hashing, worker, analysis, audit log, reports (never prints)
 │   ├── cli/       rv-pdfauth command line (clap)
 │   └── gui/       rv-pdfauth-gui desktop app (egui); state.rs holds all testable rules
 ├── templates/     HTML report templates + CSS (Jinja2/minijinja compatible)

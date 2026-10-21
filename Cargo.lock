@@ -3459,7 +3459,9 @@ dependencies = [
 name = "rv-pdfauth-gui"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "eframe",
+ "png",
  "rfd",
  "rv-pdfauth-core",
  "serde_json",

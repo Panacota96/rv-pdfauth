@@ -210,6 +210,11 @@
       "shows": "El análisis aislado de este archivo se detuvo antes de terminar (motivo: %{reason}, código de salida %{exit_code}). Se calculó el hash del archivo y su registro de integridad está completo; la estructura del PDF, sus revisiones y la comparación visual no se analizaron por completo.",
       "does_not_prove": "No demuestra que el archivo sea malicioso o falso: archivos dañados, inusuales o muy grandes pueden agotar los límites de tiempo o de memoria. Repita con límites más altos o examine el archivo manualmente."
     },
+    "EVIDENCE_CHANGED_DURING_ANALYSIS": {
+      "title": "La evidencia cambió durante el análisis",
+      "shows": "Los bytes leídos para el análisis del PDF tienen %{algorithm} %{second_pass}, pero la pasada de hash registró %{first_pass} para el mismo archivo: el archivo cambió entre las dos lecturas, de modo que los resultados del análisis pueden no corresponder a la evidencia cuyo hash se calculó.",
+      "does_not_prove": "Quién o qué modificó el archivo (un programa de sincronización, el antivirus, otro programa o un disco defectuoso pueden hacerlo) ni que la evidencia original esté alterada; trabaje sobre una copia protegida contra escritura y repita la ejecución."
+    },
     "VISUAL_CHANGE_BETWEEN_REVISIONS": {
       "title": "Cambio visible entre revisiones",
       "shows": "Al representar la revisión %{from_rev} y la revisión %{to_rev} se obtienen imágenes distintas en la(s) página(s) %{pages} (mayor proporción cambiada %{changed_ratio_max}); páginas añadidas: %{pages_added}; páginas eliminadas: %{pages_removed}. Las zonas cambiadas están recuadradas en las imágenes de comparación.",

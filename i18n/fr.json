@@ -210,6 +210,11 @@
       "shows": "L'analyse isolée de ce fichier s'est arrêtée avant la fin (motif : %{reason}, code de sortie %{exit_code}). Le fichier a été haché et son enregistrement d'intégrité est complet ; la structure du PDF, ses révisions et la comparaison visuelle n'ont pas été entièrement analysées.",
       "does_not_prove": "Cela ne prouve pas que le fichier est malveillant ou falsifié : un fichier endommagé, inhabituel ou très volumineux peut épuiser les limites de temps ou de mémoire. Relancez avec des limites plus élevées ou examinez le fichier manuellement."
     },
+    "EVIDENCE_CHANGED_DURING_ANALYSIS": {
+      "title": "La preuve a changé pendant l'analyse",
+      "shows": "Les octets lus pour l'analyse du PDF ont pour %{algorithm} %{second_pass}, alors que la passe de hachage a enregistré %{first_pass} pour le même fichier : le fichier a changé entre les deux lectures, et les résultats de l'analyse peuvent ne pas décrire la preuve hachée.",
+      "does_not_prove": "Qui ou quoi a modifié le fichier (logiciel de synchronisation, antivirus, autre programme ou disque défaillant peuvent en être la cause) ni que la preuve d'origine est altérée ; travaillez sur une copie protégée en écriture et relancez l'exécution."
+    },
     "VISUAL_CHANGE_BETWEEN_REVISIONS": {
       "title": "Changement visible entre révisions",
       "shows": "Le rendu de la révision %{from_rev} et de la révision %{to_rev} donne des images différentes sur la ou les pages %{pages} (plus forte part modifiée %{changed_ratio_max}) ; pages ajoutées : %{pages_added} ; pages supprimées : %{pages_removed}. Les zones modifiées sont encadrées sur les images de comparaison.",

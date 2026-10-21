@@ -133,7 +133,8 @@ run.rs ──► analyzer::analyze_item ── not a PDF ──► inventory ana
   a side-by-side PNG (boxes in violet on both halves) and `VISUAL_CHANGE_BETWEEN_REVISIONS` (medium); added or
   removed pages are listed. Ratios are integer ppm or decimal strings — no floats in audited JSON.
 - **Audit**: `item_analyzed.details.analysis` records the fingerprint DBs used (role, name, version, SHA-256),
-  the PDFium library (path, SHA-256, pinned build), the worker outcome and the visual-diff status.
+  the PDFium library (path, SHA-256, pinned build), the worker outcome, the visual-diff status and
+  `evidence_rehash` (the worker's digest of the parsed bytes compared with the hashing pass).
 
 ## Why Rust
 

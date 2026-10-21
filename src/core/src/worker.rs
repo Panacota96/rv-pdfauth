@@ -3,7 +3,7 @@
 //! The parent (the run, which owns the audit log) starts one child per PDF:
 //!
 //! ```text
-//! <exe> worker --in <evidence> --item-dir <item folder> --opts <DomainOptions as JSON>
+//! <exe> worker --in <evidence> --item-dir <item folder> --opts <DomainOptions as JSON> [--expect-digest <algo>:<hex>]
 //! ```
 //!
 //! Protocol `rv-pdfauth-worker/1`:
@@ -128,8 +128,12 @@ fn spawn_and_wait(
         .arg("--item-dir")
         .arg(ctx.item_dir)
         .arg("--opts")
-        .arg(&opts_json)
-        .stdin(Stdio::piped())
+        .arg(&opts_json);
+    if let Some((algo, hex)) = ctx.expected_digest {
+        cmd.arg("--expect-digest")
+            .arg(format!("{}:{}", algo.name(), hex));
+    }
+    cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     sys::configure(&mut cmd, mem_mb);
@@ -398,12 +402,26 @@ fn run_child(
     stderr: &mut dyn Write,
 ) -> i32 {
     let (mut input, mut item_dir, mut opts) = (None, None, None);
+    let mut expect: Option<(crate::hash::HashAlgo, String)> = None;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.to_str() {
             Some("--in") => input = it.next().map(PathBuf::from),
             Some("--item-dir") => item_dir = it.next().map(PathBuf::from),
             Some("--opts") => opts = it.next().and_then(|s| s.to_str()).map(String::from),
+            Some("--expect-digest") => {
+                let v = it.next().and_then(|s| s.to_str()).unwrap_or_default();
+                match v
+                    .split_once(':')
+                    .and_then(|(a, h)| Some((crate::hash::HashAlgo::parse(a)?, h.to_string())))
+                {
+                    Some(x) => expect = Some(x),
+                    None => {
+                        let _ = writeln!(stderr, "rv-pdfauth worker: bad --expect-digest {:?}", v);
+                        return 2;
+                    }
+                }
+            }
             _ => {
                 let _ = writeln!(stderr, "rv-pdfauth worker: unexpected argument {:?}", a);
                 return 2;
@@ -463,6 +481,7 @@ fn run_child(
         head: &head,
         item_dir: &item_dir,
         opts: &opts,
+        expected_digest: expect.as_ref().map(|(a, h)| (*a, h.as_str())),
     });
     let reply = Reply {
         protocol: PROTOCOL.into(),
@@ -665,6 +684,7 @@ mod tests {
                 head: b"%PDF-1.7\n",
                 item_dir: &item,
                 opts: &opts,
+                expected_digest: None,
             },
         );
         let f = a
@@ -718,6 +738,58 @@ mod tests {
             run_child(&["--bogus".into()], &mut &GO[..], &mut out, &mut err),
             2
         );
+    }
+
+    #[test]
+    fn worker_rehashes_the_mapped_evidence_against_the_first_pass() {
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/visual/one-revision.pdf");
+        let opts = serde_json::to_string(&DomainOptions {
+            visual_diff: false,
+            ..DomainOptions::default()
+        })
+        .unwrap();
+        let run = |expect: &str| {
+            let dir = tempfile::tempdir().unwrap();
+            let args: Vec<std::ffi::OsString> = vec![
+                "--in".into(),
+                fixture.clone().into(),
+                "--item-dir".into(),
+                dir.path().into(),
+                "--opts".into(),
+                opts.clone().into(),
+                "--expect-digest".into(),
+                expect.into(),
+            ];
+            let (mut out, mut err) = (Vec::new(), Vec::new());
+            let rc = run_child(&args, &mut &GO[..], &mut out, &mut err);
+            (rc, out, String::from_utf8_lossy(&err).into_owned())
+        };
+        let good = crate::hash::hash_bytes(
+            &std::fs::read(&fixture).unwrap(),
+            crate::hash::HashAlgo::Blake3,
+        );
+        let (rc, out, err) = run(&format!("blake3:{}", good));
+        assert_eq!(rc, 0, "{}", err);
+        let reply: Reply = serde_json::from_slice(&out).unwrap();
+        assert_eq!(reply.analysis.details["evidence_rehash"]["match"], true);
+        assert_eq!(
+            reply.analysis.details["evidence_rehash"]["algorithm"],
+            "blake3"
+        );
+        let (rc, out, _) = run(&format!("blake3:{}", "ab".repeat(32)));
+        assert_eq!(rc, 0);
+        let reply: Reply = serde_json::from_slice(&out).unwrap();
+        assert!(
+            reply
+                .analysis
+                .findings
+                .iter()
+                .any(|f| f.code == "EVIDENCE_CHANGED_DURING_ANALYSIS")
+        );
+        let (rc, _, err) = run("crc32:00");
+        assert_eq!(rc, 2);
+        assert!(err.contains("--expect-digest"));
     }
 
     #[test]

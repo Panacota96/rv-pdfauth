@@ -131,6 +131,10 @@ pub struct AnalyzeCtx<'a> {
     pub head: &'a [u8],
     pub item_dir: &'a std::path::Path,
     pub opts: &'a DomainOptions,
+    /// Digest of the first (hashing) pass with the run's primary algorithm. The PDF analysis re-hashes the
+    /// bytes it actually parses (the memory map, in the worker) and compares: a difference is the finding
+    /// `EVIDENCE_CHANGED_DURING_ANALYSIS`. None = no comparison (unit tests, items that are not PDFs).
+    pub expected_digest: Option<(crate::hash::HashAlgo, &'a str)>,
 }
 
 /// FROZEN entry point called by run.rs for every readable item. PDF candidates (`%PDF-` header or `.pdf`
@@ -155,7 +159,12 @@ pub fn audit_summary(details: &serde_json::Value) -> serde_json::Value {
         return serde_json::Value::Null;
     }
     let mut m = serde_json::Map::new();
-    for k in ["fingerprint_dbs", "worker", "revision_source"] {
+    for k in [
+        "fingerprint_dbs",
+        "worker",
+        "revision_source",
+        "evidence_rehash",
+    ] {
         if let Some(v) = details.get(k) {
             m.insert(k.into(), v.clone());
         }

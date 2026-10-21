@@ -210,6 +210,11 @@
       "shows": "The isolated analysis of this file stopped before finishing (reason: %{reason}, exit code %{exit_code}). The file was hashed and its integrity record is complete; the PDF structure, revisions and visual comparison were not fully analysed.",
       "does_not_prove": "It does not show that the file is malicious or forged: damaged, unusual or very large files can exhaust the time or memory limits. Re-run with higher limits or examine the file manually."
     },
+    "EVIDENCE_CHANGED_DURING_ANALYSIS": {
+      "title": "Evidence changed during the analysis",
+      "shows": "The bytes read for the PDF analysis have %{algorithm} %{second_pass}, but the hashing pass recorded %{first_pass} for the same file: the file changed between the two reads, so the analysis results may not describe the hashed evidence.",
+      "does_not_prove": "Who or what changed the file (synchronisation software, antivirus, another program or a failing disk can all do it) or that the original evidence is altered; work on a write-protected copy and repeat the run."
+    },
     "VISUAL_CHANGE_BETWEEN_REVISIONS": {
       "title": "Visible change between revisions",
       "shows": "Rendering revision %{from_rev} and revision %{to_rev} gives different images on page(s) %{pages} (largest changed share %{changed_ratio_max}); pages added: %{pages_added}; pages removed: %{pages_removed}. The changed areas are outlined in the comparison images.",

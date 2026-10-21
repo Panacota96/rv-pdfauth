@@ -104,7 +104,7 @@ physical transfers. This is a working aid, not legal advice: check it against th
 | `item_error` | unreadable item | error message |
 | `analysis_started` | each item | isolation (`worker_process` or `in_process`) |
 | `output_written` / `output_missing` | each derived file | kind, path under `items/`, size, digests (revisions, visual diffs, objects dump, embedded files) |
-| `item_analyzed` | each item | detected type, extension, findings, status; `analysis`: fingerprint databases (name, version, SHA-256), PDFium library (path, SHA-256, pinned tag), worker outcome, visual-diff status |
+| `item_analyzed` | each item | detected type, extension, findings, status; `analysis`: fingerprint databases (name, version, SHA-256), PDFium library (path, SHA-256, pinned tag), worker outcome, visual-diff status, `evidence_rehash` (second-pass digest of the parsed bytes vs the first pass) |
 | `item_cancelled` / `run_cancelled` | on cancel | processed count |
 | `duplicate_group` | after the loop | hash, item indexes |
 | `hash_register_written` | | digests of `hashes.csv` |

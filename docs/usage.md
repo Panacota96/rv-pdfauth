@@ -220,6 +220,7 @@ is the overreach to avoid in a report. The exact wording printed in reports is i
 | `ENCRYPTED_PARTIAL_ANALYSIS` (info) | Obtain the password lawfully and analyse a decrypted copy if content checks matter | Anything from the absence of content findings |
 | `NOT_A_PDF` (info) | The real type (`detected_type`); use a suitable tool | That the file is malicious |
 | `PARSER_FAILED` (high) | The `reason` (table below); re-run with higher limits; examine manually | That the file is malicious or forged |
+| `EVIDENCE_CHANGED_DURING_ANALYSIS` (high) | Which program touched the file (sync client, antivirus); copy it to write-protected media and run again; the results of this run do not describe the hashed evidence | That the original evidence was altered |
 | `EXTENSION_MISMATCH` (medium) | The detected type; open the file with a suitable tool | Intent to hide anything |
 | `EXECUTABLE_CONTENT` (high) | Treat as hostile; analyse in a sandbox | That the program is malicious |
 | `EMPTY_FILE` (info) | Whether the source has the file with content | That it was emptied on purpose |

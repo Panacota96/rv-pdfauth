@@ -289,7 +289,7 @@ sequenceDiagram
     R->>A: item_hashed (digests, mtime_unchanged)
     R->>A: analysis_started (isolation)
     R->>W: spawn, limits, "RV-WORKER-GO"
-    W->>E: pass 2: read-only memory map, parse, render
+    W->>E: pass 2: read-only memory map, re-hash, parse, render
     W->>O: revisions/, objects.json, embedded/, visual/
     W-->>R: one JSON reply (findings, details, outputs)
     R->>O: hash every output
@@ -297,10 +297,13 @@ sequenceDiagram
 ```
 
 The evidence is read **twice**: once for hashing (sequential) and once by the worker (memory-mapped, random
-access). Both opens are read-only. The second read is not re-hashed: if the file changed between the two reads,
-the findings would describe different bytes than the digests. The modification time is compared around the first
-pass only (`mtime_unchanged`). This is why the tool must run on a write-protected copy (see
-[admissibility.md](admissibility.md#consolidated-gap-list), gap G20).
+access). Both opens are read-only. The worker **re-hashes the memory-mapped bytes it parses** with the run's
+primary algorithm (the first of `--hash`) and compares the digest with the first pass (`--expect-digest` on the
+worker command line). The comparison is recorded in `details.evidence_rehash` (algorithm, both digests, bytes,
+`match`) and in the `item_analyzed` audit entry; a difference raises `EVIDENCE_CHANGED_DURING_ANALYSIS` (high):
+the file changed between the two reads, so the findings may describe other bytes than the digests. The
+modification time is still compared around the first pass (`mtime_unchanged`). Run on a write-protected copy
+anyway: the check detects a change, it does not prevent it (gap G20, closed in code).
 
 Non-PDF files (no `%PDF-` at offset 0 and no `.pdf` extension) get only the inventory checks of
 [src/core/src/analyzer.rs](../src/core/src/analyzer.rs) (type by signature, extension mismatch, executable, empty),

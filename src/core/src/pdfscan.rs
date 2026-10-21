@@ -171,6 +171,22 @@ pub fn analyze_pdf(ctx: &AnalyzeCtx) -> Analysis {
             };
         }
     };
+    // The bytes parsed below come from a second read (memory map) of the evidence: re-hash exactly those
+    // bytes with the run's primary algorithm and compare with the first pass.
+    let rehash = ctx.expected_digest.map(|(algo, first)| {
+        let second = crate::hash::hash_bytes(&bytes, algo);
+        let same = second.eq_ignore_ascii_case(first);
+        if !same {
+            findings.push(
+                Finding::new("EVIDENCE_CHANGED_DURING_ANALYSIS", Severity::High)
+                    .with("algorithm", algo.name())
+                    .with("first_pass", first)
+                    .with("second_pass", second.clone()),
+            );
+        }
+        json!({"algorithm": algo.name(), "first_pass": first, "second_pass": second,
+               "bytes": bytes.len(), "match": same})
+    });
     let fp = crate::fingerprints::load(ctx.opts.fingerprints_db.as_deref());
     let pdf_opts = PdfOptions {
         fingerprints: fp.dbs,
@@ -257,6 +273,9 @@ pub fn analyze_pdf(ctx: &AnalyzeCtx) -> Analysis {
     if let Some(m) = details.as_object_mut() {
         m.remove("object_tree");
         m.insert("revision_source".into(), revision_source.into());
+        if let Some(r) = rehash {
+            m.insert("evidence_rehash".into(), r);
+        }
         m.insert("fingerprint_dbs".into(), fp.details.into());
         m.insert("visual".into(), visual);
         if !embedded.is_null() {
@@ -354,6 +373,7 @@ mod tests {
             head: &data[..data.len().min(4096)],
             item_dir: dir,
             opts,
+            expected_digest: None,
         })
     }
 
@@ -455,6 +475,66 @@ mod tests {
         let s = crate::analyzer::audit_summary(&a.details);
         assert_eq!(s["visual"]["status"], "done");
         assert!(s["fingerprint_dbs"].is_array());
+    }
+
+    #[test]
+    fn parsed_bytes_are_rehashed_and_compared_with_the_first_pass() {
+        use crate::hash::{HashAlgo, hash_bytes};
+        let src = fixture("one-revision.pdf");
+        let data = std::fs::read(&src).unwrap();
+        let opts = DomainOptions {
+            visual_diff: false,
+            ..DomainOptions::default()
+        };
+        let ctx = |dir: &Path, expected: Option<(HashAlgo, &'static str)>| -> Analysis {
+            crate::analyzer::analyze_item(&AnalyzeCtx {
+                path: &src,
+                file_name: "one-revision.pdf",
+                size: data.len() as u64,
+                head: &data[..data.len().min(4096)],
+                item_dir: dir,
+                opts: &opts,
+                expected_digest: expected,
+            })
+        };
+        // Same bytes: recorded as a match, no finding, and the check reaches the audit summary.
+        let good: &'static str = Box::leak(hash_bytes(&data, HashAlgo::Sha256).into_boxed_str());
+        let dir = tempfile::tempdir().unwrap();
+        let a = ctx(dir.path(), Some((HashAlgo::Sha256, good)));
+        assert_eq!(a.details["evidence_rehash"]["match"], true);
+        assert_eq!(a.details["evidence_rehash"]["algorithm"], "sha256");
+        assert_eq!(a.details["evidence_rehash"]["second_pass"], good);
+        assert!(
+            a.findings
+                .iter()
+                .all(|f| f.code != "EVIDENCE_CHANGED_DURING_ANALYSIS")
+        );
+        assert_eq!(
+            crate::analyzer::audit_summary(&a.details)["evidence_rehash"]["match"],
+            true
+        );
+        // A different first-pass digest (the file changed between the two reads): high finding.
+        let dir = tempfile::tempdir().unwrap();
+        let first = "00".repeat(32);
+        let first: &'static str = Box::leak(first.into_boxed_str());
+        let a = ctx(dir.path(), Some((HashAlgo::Sha256, first)));
+        let f = a
+            .findings
+            .iter()
+            .find(|f| f.code == "EVIDENCE_CHANGED_DURING_ANALYSIS")
+            .expect("finding");
+        assert_eq!(f.severity, Severity::High);
+        assert_eq!(f.params["first_pass"], first);
+        assert_eq!(f.params["second_pass"], good);
+        assert_eq!(a.details["evidence_rehash"]["match"], false);
+        // No expected digest: no comparison.
+        let dir = tempfile::tempdir().unwrap();
+        assert!(
+            ctx(dir.path(), None)
+                .details
+                .get("evidence_rehash")
+                .is_none()
+        );
     }
 
     #[test]

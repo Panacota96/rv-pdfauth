@@ -534,6 +534,7 @@ fn pipeline(
                     head: &out.head,
                     item_dir: &item_dir,
                     opts: &cfg.domain,
+                    expected_digest: out.digests.first().map(|(a, h)| (*a, h.as_str())),
                 });
                 for o in &a.outputs {
                     let p = item_dir.join(&o.rel_path);

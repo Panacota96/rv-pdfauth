@@ -86,6 +86,9 @@ pub struct RunSummary {
     pub audit_head: String,
     /// {"status": "ok"|"pending"|"off", ...}
     pub timestamp: Value,
+    /// Per-item results (findings, `details` with revisions and visual diff), in run order. Front-ends use
+    /// them to browse the outcome (GUI revision viewer) without re-reading the reports from disk.
+    pub results: Vec<ItemResult>,
 }
 
 const PROGRESS_EVERY: Duration = Duration::from_millis(150);
@@ -562,6 +565,7 @@ pub fn run(
         log_dir: log_dir.clone(),
         audit_head: String::new(),
         timestamp: info.timestamp.clone(),
+        results: Vec::new(),
     };
     log.record("run_finished", None, json!({"items": summary.items, "bytes": summary.bytes, "errors": errors, "elapsed_ms": summary.elapsed_ms, "high": summary.high, "medium": summary.medium, "low": summary.low, "info": summary.info, "cancelled": cancelled})).map_err(io)?;
     sink(&Event::RunFinished {
@@ -579,6 +583,7 @@ pub fn run(
     });
     Ok(RunSummary {
         audit_head: log.head().to_string(),
+        results,
         ..summary
     })
 }

@@ -106,6 +106,8 @@ pub struct Revision {
     /// What this revision changes, classified for DocMDP: "form_fill", "annotations", "signature", "other",
     /// plus "metadata" (only the Info dictionary / XMP stream changed).
     pub change_kind: Vec<String>,
+    /// Number of pages in this revision's page tree (None when it has no catalog).
+    pub page_count: Option<u32>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]

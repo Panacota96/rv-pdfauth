@@ -745,6 +745,7 @@ pub fn build(bytes: &[u8], opts: &PdfOptions) -> PdfReport {
             xref_consistent: ri.xref_consistent,
             info: meta::info(&doc, k),
             xmp: meta::xmp(&doc, k),
+            page_count: doc.catalog(k).map(|_| all_pages[k - 1].len() as u32),
             ..Revision::default()
         };
         if let Some(Obj::Array(ids)) = ri.trailer.get(b"ID") {

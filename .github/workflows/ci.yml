@@ -27,7 +27,13 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: clippy (findings also surfaced as annotations)
+        run: |
+          set -o pipefail
+          if ! cargo clippy --workspace --all-targets --message-format=short -- -D warnings 2>&1 | tee clippy.log; then
+            grep -E "^(src|fuzz|tests)/.*(error|warning)" clippy.log | head -40 | while IFS= read -r l; do echo "::error title=clippy::${l}"; done
+            exit 1
+          fi
       - name: actionlint
         run: |
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7

@@ -14,5 +14,11 @@ path = "src/lib.rs"
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+miniz_oxide = "0.8"
+x509-cert.workspace = true
+der.workspace = true
+const-oid.workspace = true
+rsa.workspace = true
+sha2-legacy = { workspace = true, features = ["oid"] }
 
 [dev-dependencies]

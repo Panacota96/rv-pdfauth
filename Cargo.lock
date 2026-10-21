@@ -3398,8 +3398,14 @@ dependencies = [
 name = "rv-pdfauth-pdf"
 version = "0.1.0"
 dependencies = [
+ "const-oid 0.9.6",
+ "der 0.7.10",
+ "miniz_oxide 0.8.9",
+ "rsa",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
+ "x509-cert 0.2.5",
 ]
 
 [[package]]

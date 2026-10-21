@@ -72,6 +72,8 @@ pub struct PdfReport {
     /// Parser warnings (never silently repaired): offset + message.
     pub warnings: Vec<ParseWarning>,
     pub findings: Vec<PdfFinding>,
+    /// Offsets of every `%PDF-` header found outside objects (more than one: concatenated files).
+    pub headers: Vec<u64>,
     /// Full object tree by revision (only when PdfOptions::object_tree): {"revisions":[{"objects":[{"id":"12 0","offset":..,"type":..,"dict":{..}}]}]}
     pub object_tree: serde_json::Value,
 }
@@ -101,7 +103,8 @@ pub struct Revision {
     pub id: Vec<String>,
     /// Signature field names signed by this revision (its ByteRange ends at end_offset).
     pub signed_by: Vec<String>,
-    /// What this revision changes, classified for DocMDP: "form_fill", "annotations", "signature", "other".
+    /// What this revision changes, classified for DocMDP: "form_fill", "annotations", "signature", "other",
+    /// plus "metadata" (only the Info dictionary / XMP stream changed).
     pub change_kind: Vec<String>,
 }
 
@@ -110,6 +113,8 @@ pub struct Revision {
 pub struct PdfDate {
     pub raw: String,
     pub utc: Option<String>,
+    /// The date had no time-zone offset; `utc` then assumes UTC.
+    pub tz_missing: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
@@ -229,4 +234,6 @@ pub struct FingerprintMatch {
     pub matched_on: String,
     /// Traits of the entry that the file does NOT have (→ PRODUCER_STRUCTURE_MISMATCH).
     pub trait_mismatches: Vec<String>,
+    /// The metadata string (or header comment) that matched.
+    pub matched_value: String,
 }

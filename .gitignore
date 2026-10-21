@@ -3,3 +3,8 @@
 /dist/
 *.pdb
 /examples/sample/out/
+/.venv/
+__pycache__/
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/

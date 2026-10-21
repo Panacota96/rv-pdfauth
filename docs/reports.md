@@ -7,7 +7,7 @@ language. Each exists as JSON (machine-readable, language-neutral) plus HTML and
 ```mermaid
 flowchart TB
     RUN["Run"] --> S["statistics.json<br/>statistics.LANG.html · .pdf"]
-    RUN --> I1["items/00001-acta.txt/"]
+    RUN --> I1["items/00001-broken-xref.pdf/"]
     RUN --> I2["items/00002-…/"]
     I1 --> T1["technical.json<br/>technical.LANG.html · .pdf"]
     I1 --> C1["summary.json<br/>summary.LANG.html · .pdf"]

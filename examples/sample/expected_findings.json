@@ -1,0 +1,37 @@
+{
+  "original.pdf": [],
+  "edited-incremental.pdf": [
+    "EDITOR_FINGERPRINT",
+    "FONT_ADDED_IN_LATER_REVISION",
+    "INCREMENTAL_UPDATES",
+    "PRODUCER_CHANGED_BETWEEN_REVISIONS",
+    "REVISION_TIME_GAP"
+  ],
+  "signed-then-modified.pdf": [
+    "CONTENT_CHANGED_AFTER_SIGNATURE",
+    "DOCMDP_VIOLATION",
+    "INCREMENTAL_UPDATES",
+    "REVISION_TIME_GAP",
+    "SIGNATURE_PRESENT_TRUST_NOT_VERIFIED"
+  ],
+  "online-editor.pdf": [
+    "INVISIBLE_TEXT",
+    "METADATA_INFO_XMP_MISMATCH",
+    "ONLINE_EDITOR_OR_UNLOCKER",
+    "PRODUCER_STRUCTURE_MISMATCH"
+  ],
+  "broken-xref.pdf": [
+    "DATA_AFTER_FINAL_EOF",
+    "XREF_OFFSETS_INCONSISTENT"
+  ],
+  "scan-with-text.pdf": [
+    "FONT_ADDED_IN_LATER_REVISION",
+    "INCREMENTAL_UPDATES",
+    "SCANNED_PAGES_STRUCTURE_ONLY",
+    "TEXT_OVER_SCANNED_IMAGE"
+  ],
+  "crash.pdf": [
+    "DATA_AFTER_FINAL_EOF",
+    "XREF_OFFSETS_INCONSISTENT"
+  ]
+}

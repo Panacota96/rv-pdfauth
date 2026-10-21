@@ -1,8 +1,8 @@
 //! Producer/editor fingerprint databases handed to the PDF layer, and their identity for the audit trail.
 //!
 //! Three sources, in this order:
-//! 1. **starter** — bundled with the PDF layer (`rv_pdfauth_pdf::starter_db()`, behind the `starter-db`
-//!    feature until that function lands; without it an empty DB is recorded as `unavailable`);
+//! 1. **starter** — bundled with the PDF layer (`rv_pdfauth_pdf::starter_db()`, built from
+//!    `fingerprints/starter.json`);
 //! 2. **local** — the examiner's learned DB: `%LOCALAPPDATA%\Rakvor\rv-pdfauth\fingerprints.local.json`
 //!    (Windows) or `$XDG_DATA_HOME/rakvor/rv-pdfauth/fingerprints.local.json`, default
 //!    `~/.local/share/rakvor/rv-pdfauth/` (Linux/macOS);
@@ -24,15 +24,9 @@ pub struct LoadedDbs {
     pub details: Vec<Value>,
 }
 
-/// Bundled starter DB (adapter: compiles before and after the PDF layer exposes `starter_db()`).
-#[cfg(feature = "starter-db")]
+/// Bundled starter DB (`fingerprints/starter.json`, embedded in the PDF layer).
 fn starter_db() -> Option<FingerprintDb> {
     Some(rv_pdfauth_pdf::starter_db())
-}
-
-#[cfg(not(feature = "starter-db"))]
-fn starter_db() -> Option<FingerprintDb> {
-    None
 }
 
 /// Default location of the examiner's learned DB on this OS (None if no home/app-data folder is known).

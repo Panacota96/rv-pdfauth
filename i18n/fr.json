@@ -123,13 +123,143 @@
       "title": "Comparaison visuelle non effectuée",
       "shows": "La comparaison visuelle page par page des révisions n'a pas pu être faite : %{reason}.",
       "does_not_prove": "Cela ne montre pas que les révisions sont identiques ou différentes à l'écran ; l'analyse structurelle des révisions n'est pas affectée."
+    },
+    "INCREMENTAL_UPDATES": {
+      "title": "Mises à jour incrémentales",
+      "shows": "Le fichier contient %{revisions} révisions : l'enregistrement d'origine et des mises à jour ajoutées ensuite à la fin du fichier. Chaque version antérieure peut être extraite et comparée.",
+      "does_not_prove": "L'enregistrement incrémental est normal lorsqu'un PDF est rempli, signé, annoté ou réenregistré par de nombreux logiciels ; il n'indique ni qui a modifié le fichier ni que la modification était irrégulière."
+    },
+    "METADATA_INFO_XMP_MISMATCH": {
+      "title": "Le dictionnaire Info et les métadonnées XMP divergent",
+      "shows": "La valeur %{field} diffère entre le dictionnaire Info (%{info}) et les métadonnées XMP (%{xmp}).",
+      "does_not_prove": "Certains logiciels ne mettent à jour qu'un seul des deux emplacements de métadonnées ; l'écart montre que le fichier est passé par plusieurs outils ou a été modifié, non que son contenu est falsifié."
+    },
+    "MODDATE_BEFORE_CREATIONDATE": {
+      "title": "Date de modification antérieure à la date de création",
+      "shows": "Dans la révision %{revision}, la date de modification des métadonnées %{source} (%{modification}) est antérieure à la date de création (%{creation}).",
+      "does_not_prove": "Une horloge mal réglée, une mauvaise gestion des fuseaux horaires ou des métadonnées reprises d'un modèle peuvent en être la cause ; cela ne prouve pas à lui seul un antidatage volontaire."
+    },
+    "REVISION_TIME_GAP": {
+      "title": "Écart de temps entre révisions",
+      "shows": "La révision %{to_rev} est datée %{gap} après la révision %{from_rev} (d'après leurs dates de modification).",
+      "does_not_prove": "Les dates des métadonnées sont écrites par le logiciel d'édition à partir de l'horloge de l'ordinateur et peuvent être fixées librement ; l'écart ne prouve ni quand les modifications ont réellement eu lieu ni qui les a faites."
+    },
+    "PRODUCER_CHANGED_BETWEEN_REVISIONS": {
+      "title": "Logiciel différent d'une révision à l'autre",
+      "shows": "Le producteur passe de « %{before} » dans la révision %{from_rev} à « %{after} » dans la révision %{to_rev}.",
+      "does_not_prove": "Un document passe couramment par plusieurs logiciels (par exemple un outil de signature ou de formulaires) ; cela montre un changement d'outil, ni qui l'a utilisé ni pourquoi."
+    },
+    "EDITOR_FINGERPRINT": {
+      "title": "Empreinte d'un éditeur PDF",
+      "shows": "La révision %{revision} porte l'empreinte d'un éditeur PDF : %{label} (métadonnée %{matched_on} : « %{value} »).",
+      "does_not_prove": "Les éditeurs servent aussi à des tâches légitimes : remplir, signer, faire pivoter ou compresser un document ; l'empreinte indique quel logiciel a enregistré le fichier, pas ce qui a été modifié."
+    },
+    "ONLINE_EDITOR_OR_UNLOCKER": {
+      "title": "Éditeur en ligne ou outil de suppression de protection",
+      "shows": "La révision %{revision} a été enregistrée par %{label} (métadonnée %{matched_on} : « %{value} »), un service web ou un outil qui retire la protection du PDF.",
+      "does_not_prove": "Ces services sont souvent utilisés de bonne foi (fusionner, compresser ou convertir des fichiers) ; la correspondance montre que le fichier est passé par un tel outil, non que son contenu a été altéré. Les métadonnées peuvent aussi être saisies à la main."
+    },
+    "PRODUCER_STRUCTURE_MISMATCH": {
+      "title": "Structure non conforme au producteur déclaré",
+      "shows": "La révision %{revision} déclare %{label}, mais sa structure interne diffère de ce que ce logiciel produit habituellement : %{traits}.",
+      "does_not_prove": "Les optimiseurs, les outils de réparation et les réenregistrements modifient la structure sans toucher aux métadonnées, et les versions d'un même logiciel varient ; cela suggère que le producteur déclaré n'est pas le dernier logiciel à avoir écrit le fichier, non que le contenu est falsifié."
+    },
+    "UNKNOWN_PRODUCER": {
+      "title": "Producteur absent de la base d'empreintes",
+      "shows": "Le producteur « %{producer} » (révision %{revision}) ne figure pas dans la base d'empreintes utilisée pour cette analyse.",
+      "does_not_prove": "La base couvre un ensemble limité de logiciels ; un producteur inconnu n'est pas suspect en soi."
+    },
+    "XREF_OFFSETS_INCONSISTENT": {
+      "title": "Références croisées incohérentes",
+      "shows": "Dans la ou les révisions %{revisions}, les références croisées ne pointent pas vers les objets qu'elles annoncent, ou startxref pointe au mauvais endroit. Les objets ont été retrouvés en parcourant le fichier ; chaque cas figure dans les avertissements.",
+      "does_not_prove": "Des logiciels défectueux ou des transferts endommagés produisent aussi des décalages erronés ; cela montre que le fichier n'a pas été écrit proprement par un outil standard, non qu'il a été manipulé."
+    },
+    "HYBRID_XREF": {
+      "title": "Références croisées hybrides",
+      "shows": "La ou les révisions %{revisions} utilisent à la fois une table classique et un flux de références croisées (/XRefStm) : des lecteurs anciens et récents peuvent donc voir des objets différents.",
+      "does_not_prove": "Certains logiciels courants produisent des fichiers hybrides par souci de compatibilité ; l'analyse compare les deux vues et signale les différences dans les avertissements."
+    },
+    "DATA_AFTER_FINAL_EOF": {
+      "title": "Données après la fin du fichier",
+      "shows": "%{bytes} octets suivent le dernier marqueur %%EOF. Les lecteurs PDF les ignorent : ils ne sont donc pas affichés.",
+      "does_not_prove": "Des outils de transfert et certains logiciels ajoutent du remplissage ou des données de journalisation ; cela ne prouve pas que ces octets sont un contenu caché, mais ils doivent être examinés séparément."
+    },
+    "CONTENT_CHANGED_AFTER_SIGNATURE": {
+      "title": "Contenu modifié après la signature",
+      "shows": "La signature %{field} couvre une révision antérieure ; la ou les révisions %{revisions}, ajoutées ensuite, modifient le contenu des pages ou la structure du document, ce que la signature ne couvre pas.",
+      "does_not_prove": "La signature reste mathématiquement valide pour la révision signée ; cela n'indique ni qui a fait les modifications ultérieures ni si le signataire les a approuvées. Comparez la révision signée à la version finale."
+    },
+    "SIGNATURE_INTEGRITY_FAILED": {
+      "title": "Échec du contrôle d'intégrité de la signature",
+      "shows": "La signature %{field} a échoué à un contrôle d'intégrité (%{reason}). digest_mismatch : les octets signés ne correspondent plus à l'empreinte enregistrée dans la signature ; signature_invalid : la valeur de la signature ne se vérifie pas avec la clé publique du signataire ; byterange_* : la plage d'octets signée ne couvre pas exactement une révision moins la signature elle-même.",
+      "does_not_prove": "Cela montre que la signature ne protège pas les octets dans leur état actuel ; cela n'indique pas qui les a modifiés, et un transfert endommagé peut aussi en être la cause."
+    },
+    "SIGNATURE_PRESENT_TRUST_NOT_VERIFIED": {
+      "title": "Signature électronique présente (confiance non vérifiée)",
+      "shows": "Le fichier contient la signature %{field}, apposée par %{signer}. Sa couverture des octets et son intégrité cryptographique sont indiquées séparément.",
+      "does_not_prove": "Cet outil ne valide ni la chaîne de certificats, ni la révocation, ni l'identité du signataire ; une signature peut être techniquement intègre et provenir d'un certificat non fiable ou auto-généré."
+    },
+    "DOCMDP_VIOLATION": {
+      "title": "Modifications non autorisées par la signature de certification",
+      "shows": "La signature %{field} certifie le document avec le niveau d'autorisation %{level} (1 = aucune modification, 2 = remplissage de formulaires et signature, 3 = également annotations), mais la ou les révisions %{revisions} contiennent des modifications hors de ce niveau.",
+      "does_not_prove": "La classification des modifications est heuristique et certains lecteurs appliquent les autorisations différemment ; cela montre un conflit avec les autorisations déclarées, pas une intention."
+    },
+    "JAVASCRIPT_PRESENT": {
+      "title": "Présence de JavaScript",
+      "shows": "%{count} objet(s) contiennent des actions JavaScript (%{objects}).",
+      "does_not_prove": "Les formulaires utilisent souvent JavaScript pour des calculs et des validations ; cela ne prouve pas un comportement malveillant. Analysez les scripts dans un environnement isolé."
+    },
+    "LAUNCH_ACTION": {
+      "title": "Action de lancement (/Launch)",
+      "shows": "%{count} objet(s) contiennent une action /Launch qui demande au lecteur d'ouvrir un fichier ou d'exécuter un programme (%{objects}).",
+      "does_not_prove": "La plupart des lecteurs bloquent l'action ou demandent confirmation ; cela montre qu'une tentative est définie, non qu'elle a été exécutée ni ce qu'elle ferait."
+    },
+    "EMBEDDED_FILES": {
+      "title": "Fichiers incorporés",
+      "shows": "Le PDF contient %{count} fichier(s) incorporé(s) (pièces jointes).",
+      "does_not_prove": "Les pièces jointes sont une fonction normale du PDF ; elles ne sont pas forcément visibles dans le document et doivent être extraites et examinées séparément."
+    },
+    "INVISIBLE_TEXT": {
+      "title": "Texte invisible",
+      "shows": "La page %{page} affiche %{count} élément(s) de texte invisibles : mode de rendu invisible (3 Tr), remplissage blanc ou totalement transparent.",
+      "does_not_prove": "Les couches OCR des pages numérisées et les textes d'accessibilité sont invisibles par conception, et un texte blanc peut se trouver sur un fond sombre ; cela ne prouve pas à lui seul une volonté de dissimulation."
+    },
+    "TEXT_OVER_SCANNED_IMAGE": {
+      "title": "Texte superposé à une image numérisée",
+      "shows": "La page %{page} est constituée principalement d'une image couvrant presque toute la page et contient aussi du texte ; ce texte apparaît pour la première fois dans la révision %{text_revision}.",
+      "does_not_prove": "Les numériseurs et les logiciels d'OCR ajoutent une couche de texte aux pages numérisées pour permettre la recherche ; un texte ajouté dans une révision ultérieure mérite une comparaison visuelle, mais aucun des deux cas ne prouve une altération."
+    },
+    "FONT_ADDED_IN_LATER_REVISION": {
+      "title": "Police ajoutée dans une révision ultérieure",
+      "shows": "La police %{font} apparaît pour la première fois dans la révision %{revision}, où le contenu des pages l'utilise.",
+      "does_not_prove": "Les outils d'édition ajoutent des polices lors du remplissage d'un formulaire, de l'ajout d'un tampon ou d'un commentaire, ou d'une correction légitime ; cela montre que du texte a été écrit dans cette révision, non qu'il falsifie le document."
+    },
+    "SCANNED_PAGES_STRUCTURE_ONLY": {
+      "title": "Pages numérisées : analyse structurelle uniquement",
+      "shows": "%{count} page(s) (%{pages}) se composent d'une seule grande image sans texte.",
+      "does_not_prove": "Les modifications à l'intérieur des pixels d'une image (par exemple une retouche avant ou après la numérisation) ne sont pas détectées par cette analyse structurelle."
+    },
+    "ENCRYPTED_PARTIAL_ANALYSIS": {
+      "title": "Document chiffré : analyse partielle",
+      "shows": "Le document est chiffré (/Encrypt). Sa structure, ses révisions et les plages d'octets des signatures ont été analysées, mais les chaînes et flux chiffrés (métadonnées, contenu des pages, flux d'objets) n'ont pas été déchiffrés.",
+      "does_not_prove": "Le chiffrement est courant et légitime ; les constatations qui dépendent du contenu déchiffré n'ont pas pu être vérifiées et sont absentes pour cette seule raison."
+    },
+    "NOT_A_PDF": {
+      "title": "Ce n'est pas un fichier PDF",
+      "shows": "Aucun en-tête %PDF- n'a été trouvé dans les 1 024 premiers octets : le fichier n'a donc pas été analysé comme un PDF.",
+      "does_not_prove": "Il peut s'agir d'un autre format portant l'extension .pdf ou d'un PDF endommagé ; examinez-le avec un outil adapté à son type réel."
     }
   },
   "limitations": {
     "SIGNATURE_TABLE_LIMITED": "La détection du type repose sur une table limitée de signatures courantes ; les types inconnus sont signalés comme inconnus, non comme suspects.",
     "TIMESTAMPS_FROM_FILESYSTEM": "Les dates de modification proviennent du système de fichiers de la copie examinée et peuvent différer de la source d'origine.",
     "CLEAN_RESULT_IS_NOT_AUTHENTICITY": "Un résultat sans constatation ne prouve pas qu'un fichier est authentique ni qu'il n'a pas été modifié avant son acquisition.",
-    "TIMESTAMP_PROVES_EXISTENCE_ONLY": "Un horodatage qualifié prouve que le journal d'audit existait sous cette forme exacte à l'heure indiquée ; il ne prouve pas que la copie examinée correspond à la source d'origine."
+    "TIMESTAMP_PROVES_EXISTENCE_ONLY": "Un horodatage qualifié prouve que le journal d'audit existait sous cette forme exacte à l'heure indiquée ; il ne prouve pas que la copie examinée correspond à la source d'origine.",
+    "NO_FINDING_IS_NOT_AUTHENTICITY": "L'absence de constatation ne prouve pas qu'un PDF est authentique ou non modifié : un document peut être falsifié avant d'être enregistré, ou recréé sans laisser de trace.",
+    "FLATTENED_OR_REGENERATED_PDF_LOSES_HISTORY": "Lorsqu'un PDF est imprimé en PDF, aplati, optimisé ou régénéré, ses révisions antérieures et la plupart des traces d'édition disparaissent ; seul son dernier état peut être examiné.",
+    "FINGERPRINT_DB_COVERAGE": "Les empreintes de producteurs proviennent d'une base limitée (documentation des éditeurs et fichiers générés par Rakvor) ; le producteur peut être saisi à la main, et les valeurs inconnues ou usurpées ne peuvent pas être reconnues.",
+    "SIGNATURE_TRUST_NOT_VALIDATED": "Les signatures électroniques ne sont contrôlées que pour la couverture des octets et l'intégrité cryptographique ; la chaîne de certificats, la révocation et l'identité du signataire ne sont pas validées.",
+    "RENDERING_PAGE_CAP": "La comparaison visuelle entre révisions ne rend qu'un nombre limité de pages par révision ; au-delà, les pages ne sont comparées que structurellement."
   },
   "brand": {
     "descriptor": "INVESTIGATION NUMÉRIQUE | RÉPONSE AUX INCIDENTS | SÉCURITÉ",

@@ -123,13 +123,143 @@
       "title": "Comparación visual no realizada",
       "shows": "No se pudo hacer la comparación visual página por página de las revisiones: %{reason}.",
       "does_not_prove": "No demuestra que las revisiones se vean iguales ni distintas; el análisis estructural de las revisiones no se ve afectado."
+    },
+    "INCREMENTAL_UPDATES": {
+      "title": "Actualizaciones incrementales",
+      "shows": "El archivo contiene %{revisions} revisiones: el guardado original y actualizaciones añadidas después al final del archivo. Cada versión anterior se puede extraer y comparar.",
+      "does_not_prove": "Guardar de forma incremental es normal cuando un PDF se diligencia, se firma, se anota o lo vuelven a guardar muchos programas; no indica quién modificó el archivo ni que el cambio haya sido indebido."
+    },
+    "METADATA_INFO_XMP_MISMATCH": {
+      "title": "El diccionario Info y los metadatos XMP no coinciden",
+      "shows": "El valor de %{field} es distinto en el diccionario Info (%{info}) y en los metadatos XMP (%{xmp}).",
+      "does_not_prove": "Algunos programas actualizan solo uno de los dos lugares donde se guardan los metadatos; la diferencia indica que el archivo pasó por más de una herramienta o fue editado, no que su contenido sea falso."
+    },
+    "MODDATE_BEFORE_CREATIONDATE": {
+      "title": "Fecha de modificación anterior a la de creación",
+      "shows": "En la revisión %{revision}, la fecha de modificación de los metadatos %{source} (%{modification}) es anterior a la fecha de creación (%{creation}).",
+      "does_not_prove": "Relojes mal configurados, errores en el manejo de zonas horarias o metadatos heredados de una plantilla pueden producirlo; por sí solo no demuestra que el documento se haya antedatado a propósito."
+    },
+    "REVISION_TIME_GAP": {
+      "title": "Intervalo de tiempo entre revisiones",
+      "shows": "La revisión %{to_rev} tiene una fecha %{gap} posterior a la de la revisión %{from_rev} (según sus fechas de modificación).",
+      "does_not_prove": "Las fechas de los metadatos las escribe el programa de edición a partir del reloj del equipo y pueden fijarse a voluntad; el intervalo no prueba cuándo se hicieron realmente los cambios ni quién los hizo."
+    },
+    "PRODUCER_CHANGED_BETWEEN_REVISIONS": {
+      "title": "Software distinto entre revisiones",
+      "shows": "El productor cambia de «%{before}» en la revisión %{from_rev} a «%{after}» en la revisión %{to_rev}.",
+      "does_not_prove": "Es habitual que un documento pase por varios programas (por ejemplo, uno de firma o de formularios); esto muestra un cambio de herramienta, no quién la usó ni con qué fin."
+    },
+    "EDITOR_FINGERPRINT": {
+      "title": "Huella de un editor de PDF",
+      "shows": "La revisión %{revision} lleva la huella de un editor de PDF: %{label} (metadato %{matched_on}: «%{value}»).",
+      "does_not_prove": "Los editores también se usan para tareas legítimas como diligenciar, firmar, rotar o comprimir un documento; la huella indica qué programa guardó el archivo, no qué se modificó."
+    },
+    "ONLINE_EDITOR_OR_UNLOCKER": {
+      "title": "Editor en línea o herramienta para quitar protecciones",
+      "shows": "La revisión %{revision} fue guardada por %{label} (metadato %{matched_on}: «%{value}»), un servicio web o una herramienta que elimina la protección del PDF.",
+      "does_not_prove": "Estos servicios suelen usarse de buena fe (para unir, comprimir o convertir archivos); la coincidencia muestra que el archivo pasó por esa herramienta, no que su contenido haya sido alterado. Los metadatos también pueden escribirse a mano."
+    },
+    "PRODUCER_STRUCTURE_MISMATCH": {
+      "title": "La estructura no corresponde al productor declarado",
+      "shows": "La revisión %{revision} declara %{label}, pero su estructura interna difiere de la que ese programa suele generar: %{traits}.",
+      "does_not_prove": "Los optimizadores, las herramientas de reparación y los guardados posteriores cambian la estructura sin tocar los metadatos, y las versiones de un mismo programa varían; sugiere que el productor declarado no fue el último programa que escribió el archivo, no que el contenido sea falso."
+    },
+    "UNKNOWN_PRODUCER": {
+      "title": "Productor ausente de la base de huellas",
+      "shows": "El productor «%{producer}» (revisión %{revision}) no figura en la base de huellas usada en este análisis.",
+      "does_not_prove": "La base cubre un conjunto limitado de programas; un productor desconocido no es sospechoso en sí mismo."
+    },
+    "XREF_OFFSETS_INCONSISTENT": {
+      "title": "Referencias cruzadas incoherentes",
+      "shows": "En la(s) revisión(es) %{revisions}, los datos de referencias cruzadas no apuntan a los objetos que enumeran, o startxref apunta a un lugar equivocado. Los objetos se localizaron recorriendo el archivo y cada caso figura en las advertencias.",
+      "does_not_prove": "Programas defectuosos y transferencias dañadas también generan desplazamientos erróneos; indica que el archivo no fue escrito limpiamente por una herramienta estándar, no que haya sido manipulado."
+    },
+    "HYBRID_XREF": {
+      "title": "Referencias cruzadas híbridas",
+      "shows": "La(s) revisión(es) %{revisions} usan a la vez una tabla clásica y un flujo de referencias cruzadas (/XRefStm), de modo que lectores antiguos y modernos pueden ver objetos distintos.",
+      "does_not_prove": "Algunos programas de uso común generan archivos híbridos por compatibilidad; el análisis compara ambas vistas y reporta las diferencias en las advertencias."
+    },
+    "DATA_AFTER_FINAL_EOF": {
+      "title": "Datos después del final del archivo",
+      "shows": "Hay %{bytes} bytes después del último marcador %%EOF. Los lectores de PDF los ignoran, por lo que no se muestran.",
+      "does_not_prove": "Algunas herramientas de transferencia y algunos programas añaden relleno o datos de registro; no demuestra que esos bytes sean contenido oculto, pero deben examinarse por separado."
+    },
+    "CONTENT_CHANGED_AFTER_SIGNATURE": {
+      "title": "Contenido modificado después de la firma",
+      "shows": "La firma %{field} cubre una revisión anterior; la(s) revisión(es) %{revisions}, añadidas después, cambian el contenido de las páginas o la estructura del documento, y la firma no las cubre.",
+      "does_not_prove": "La firma sigue siendo matemáticamente válida para la revisión firmada; esto no indica quién hizo los cambios posteriores ni si el firmante los aprobó. Compare la revisión firmada con la final."
+    },
+    "SIGNATURE_INTEGRITY_FAILED": {
+      "title": "Falló la verificación de integridad de la firma",
+      "shows": "La firma %{field} no superó una verificación de integridad (%{reason}). digest_mismatch: los bytes firmados ya no coinciden con el resumen guardado en la firma; signature_invalid: el valor de la firma no se verifica con la clave pública del firmante; byterange_*: el rango de bytes firmado no cubre exactamente una revisión menos la propia firma.",
+      "does_not_prove": "Muestra que la firma no protege los bytes en su estado actual; no indica quién los alteró, y una transferencia dañada también puede causarlo."
+    },
+    "SIGNATURE_PRESENT_TRUST_NOT_VERIFIED": {
+      "title": "Firma digital presente (confianza no verificada)",
+      "shows": "El archivo contiene la firma %{field}, firmada por %{signer}. Su cobertura de bytes y su integridad criptográfica se informan por separado.",
+      "does_not_prove": "Esta herramienta no valida la cadena de certificados, la revocación ni la identidad del firmante; una firma puede estar técnicamente íntegra y provenir de un certificado no confiable o autogenerado."
+    },
+    "DOCMDP_VIOLATION": {
+      "title": "Cambios no permitidos por la firma de certificación",
+      "shows": "La firma %{field} certifica el documento con el nivel de permisos %{level} (1 = sin cambios, 2 = diligenciar formularios y firmar, 3 = además anotaciones), pero la(s) revisión(es) %{revisions} contienen cambios fuera de ese nivel.",
+      "does_not_prove": "La clasificación de los cambios es heurística y algunos visores aplican los permisos de forma distinta; muestra un conflicto con los permisos declarados, no una intención."
+    },
+    "JAVASCRIPT_PRESENT": {
+      "title": "Presencia de JavaScript",
+      "shows": "%{count} objeto(s) contienen acciones JavaScript (%{objects}).",
+      "does_not_prove": "Los formularios suelen usar JavaScript para cálculos y validaciones; no demuestra un comportamiento malicioso. Analice los scripts en un entorno aislado."
+    },
+    "LAUNCH_ACTION": {
+      "title": "Acción de ejecución (/Launch)",
+      "shows": "%{count} objeto(s) contienen una acción /Launch que pide al visor abrir un archivo o ejecutar un programa (%{objects}).",
+      "does_not_prove": "La mayoría de los visores bloquean la acción o piden confirmación; muestra que el intento está definido, no que se haya ejecutado ni lo que haría."
+    },
+    "EMBEDDED_FILES": {
+      "title": "Archivos incrustados",
+      "shows": "El PDF contiene %{count} archivo(s) incrustado(s) (adjuntos).",
+      "does_not_prove": "Los adjuntos son una función normal del PDF; no siempre son visibles en el documento y deben extraerse y examinarse por separado."
+    },
+    "INVISIBLE_TEXT": {
+      "title": "Texto invisible",
+      "shows": "La página %{page} dibuja %{count} fragmento(s) de texto que no se ven: modo de representación invisible (3 Tr), relleno blanco o relleno totalmente transparente.",
+      "does_not_prove": "Las capas OCR de las páginas escaneadas y el texto de accesibilidad son invisibles por diseño, y un texto blanco puede estar sobre un fondo oscuro; por sí solo no demuestra un intento de ocultar contenido."
+    },
+    "TEXT_OVER_SCANNED_IMAGE": {
+      "title": "Texto sobre una imagen escaneada",
+      "shows": "La página %{page} se compone principalmente de una imagen que cubre casi toda la página y además contiene texto; el texto aparece por primera vez en la revisión %{text_revision}.",
+      "does_not_prove": "Los escáneres y el software de OCR añaden una capa de texto a las páginas escaneadas para poder buscar en ellas; un texto añadido en una revisión posterior merece una comparación visual, pero ninguno de los dos casos prueba una alteración."
+    },
+    "FONT_ADDED_IN_LATER_REVISION": {
+      "title": "Fuente añadida en una revisión posterior",
+      "shows": "La fuente %{font} aparece por primera vez en la revisión %{revision} y el contenido de las páginas la usa en esa revisión.",
+      "does_not_prove": "Las herramientas de edición añaden fuentes al diligenciar un formulario, poner un sello o un comentario, o corregir un texto de forma legítima; indica que se escribió texto en esa revisión, no que falsee el documento."
+    },
+    "SCANNED_PAGES_STRUCTURE_ONLY": {
+      "title": "Páginas escaneadas: solo análisis estructural",
+      "shows": "%{count} página(s) (%{pages}) consisten en una sola imagen grande sin texto.",
+      "does_not_prove": "Los cambios dentro de los píxeles de una imagen (por ejemplo, retoques antes o después del escaneo) no se detectan con este análisis estructural."
+    },
+    "ENCRYPTED_PARTIAL_ANALYSIS": {
+      "title": "Documento cifrado: análisis parcial",
+      "shows": "El documento está cifrado (/Encrypt). Se analizaron su estructura, sus revisiones y los rangos de bytes de las firmas, pero no se descifraron las cadenas ni los flujos cifrados (metadatos, contenido de las páginas, flujos de objetos).",
+      "does_not_prove": "El cifrado es frecuente y legítimo; los hallazgos que dependen del contenido descifrado no pudieron verificarse y faltan solo por esa razón."
+    },
+    "NOT_A_PDF": {
+      "title": "No es un archivo PDF",
+      "shows": "No se encontró el encabezado %PDF- en los primeros 1024 bytes, por lo que el archivo no se analizó como PDF.",
+      "does_not_prove": "Puede tratarse de otro formato con nombre .pdf o de un PDF dañado; examínelo con una herramienta adecuada a su tipo real."
     }
   },
   "limitations": {
     "SIGNATURE_TABLE_LIMITED": "La detección de tipo usa una tabla limitada de firmas comunes; los tipos desconocidos se reportan como desconocidos, no como sospechosos.",
     "TIMESTAMPS_FROM_FILESYSTEM": "Las fechas de modificación provienen del sistema de archivos de la copia examinada y pueden diferir de la fuente original.",
     "CLEAN_RESULT_IS_NOT_AUTHENTICITY": "Un resultado sin hallazgos no prueba que un archivo sea auténtico ni que no haya sido alterado antes de su adquisición.",
-    "TIMESTAMP_PROVES_EXISTENCE_ONLY": "Un sello de tiempo confiable prueba que el log de auditoría existía en esta forma exacta en la hora indicada; no prueba que la copia examinada coincida con la fuente original."
+    "TIMESTAMP_PROVES_EXISTENCE_ONLY": "Un sello de tiempo confiable prueba que el log de auditoría existía en esta forma exacta en la hora indicada; no prueba que la copia examinada coincida con la fuente original.",
+    "NO_FINDING_IS_NOT_AUTHENTICITY": "La ausencia de hallazgos no prueba que un PDF sea auténtico o no haya sido alterado: un documento puede falsificarse antes de guardarse o recrearse sin dejar rastro.",
+    "FLATTENED_OR_REGENERATED_PDF_LOSES_HISTORY": "Cuando un PDF se imprime a PDF, se aplana, se optimiza o se regenera, se pierden sus revisiones anteriores y la mayoría de las huellas de edición; solo puede examinarse su último estado.",
+    "FINGERPRINT_DB_COVERAGE": "Las huellas de productores provienen de una base limitada (documentación de fabricantes y archivos generados por Rakvor); el productor puede escribirse a mano, y los valores desconocidos o falsificados no pueden reconocerse.",
+    "SIGNATURE_TRUST_NOT_VALIDATED": "Las firmas digitales solo se verifican en cuanto a cobertura de bytes e integridad criptográfica; no se validan las cadenas de certificados, la revocación ni la identidad del firmante.",
+    "RENDERING_PAGE_CAP": "La comparación visual entre revisiones representa solo un número limitado de páginas por revisión; las páginas que superan ese límite solo se comparan estructuralmente."
   },
   "brand": {
     "descriptor": "FORENSE | RESPUESTA A INCIDENTES | SEGURIDAD",

@@ -3,20 +3,30 @@
 //!
 //! The parser reads hostile input, so this crate forbids `unsafe` and must never panic on any byte
 //! sequence (fuzzed with cargo-fuzz). Every value it reports keeps its byte offset in the file.
+//!
+//! Modules: `obj` (tokenizer/parser), `filters` (stream decoding with limits), `doc` (linear scan,
+//! revisions, xref tables/streams, object resolution), `meta` (Info, dates, XMP), `pages` (page tree,
+//! content interpretation), `sig` (CMS signatures, DocMDP), `fingerprint` (producer database) and
+//! `analysis` (findings).
 #![forbid(unsafe_code)]
 
+pub mod analysis;
+pub mod doc;
+pub mod filters;
+pub mod fingerprint;
+pub mod meta;
 pub mod model;
+pub mod obj;
+pub mod pages;
+pub mod sig;
 
+pub use fingerprint::starter_db;
 pub use model::*;
 
 /// Analyse one PDF. `bytes` is the whole file (memory-mapped by the caller, opened read-only).
 /// FROZEN SIGNATURE: the core and the worker call exactly this.
 pub fn analyze(bytes: &[u8], opts: &PdfOptions) -> PdfReport {
-    let _ = opts;
-    PdfReport {
-        is_pdf: bytes.starts_with(b"%PDF-"),
-        ..PdfReport::default()
-    }
+    analysis::build(bytes, opts)
 }
 
 /// Bytes of revision `rev` (1-based) = the file up to and including that revision's `%%EOF` line.

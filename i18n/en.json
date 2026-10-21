@@ -123,13 +123,143 @@
       "title": "Visual comparison not performed",
       "shows": "The page-by-page visual comparison of the revisions could not be made: %{reason}.",
       "does_not_prove": "It does not show that the revisions look the same or differ; the structural analysis of the revisions is unaffected."
+    },
+    "INCREMENTAL_UPDATES": {
+      "title": "Incremental updates",
+      "shows": "The file contains %{revisions} revisions: the original save plus later updates appended to the end of the file. Each earlier version can be extracted and compared.",
+      "does_not_prove": "Incremental saving is normal when a PDF is filled in, signed, annotated or re-saved by many programs; it does not show who changed the file or that a change was improper."
+    },
+    "METADATA_INFO_XMP_MISMATCH": {
+      "title": "Info dictionary and XMP metadata disagree",
+      "shows": "The %{field} value differs between the Info dictionary (%{info}) and the XMP metadata (%{xmp}).",
+      "does_not_prove": "Some programs update only one of the two metadata stores; a mismatch shows that the file was processed by more than one tool or edited, not that its content was falsified."
+    },
+    "MODDATE_BEFORE_CREATIONDATE": {
+      "title": "Modification date earlier than creation date",
+      "shows": "In revision %{revision}, the %{source} modification date (%{modification}) is earlier than the creation date (%{creation}).",
+      "does_not_prove": "Wrong computer clocks, time-zone handling bugs and metadata copied from a template can cause this; it does not by itself show deliberate backdating."
+    },
+    "REVISION_TIME_GAP": {
+      "title": "Time gap between revisions",
+      "shows": "Revision %{to_rev} is dated %{gap} after revision %{from_rev} (according to their modification dates).",
+      "does_not_prove": "Metadata dates are written by the editing software from the computer clock and can be set freely; the gap does not prove when the changes were really made or by whom."
+    },
+    "PRODUCER_CHANGED_BETWEEN_REVISIONS": {
+      "title": "Different software between revisions",
+      "shows": "The producer changes from “%{before}” in revision %{from_rev} to “%{after}” in revision %{to_rev}.",
+      "does_not_prove": "Documents legitimately pass through several programs (for example a signing or form tool); this shows a change of tool, not who used it or why."
+    },
+    "EDITOR_FINGERPRINT": {
+      "title": "PDF editor fingerprint",
+      "shows": "Revision %{revision} carries the fingerprint of a PDF editor: %{label} (metadata %{matched_on}: “%{value}”).",
+      "does_not_prove": "Editors are also used for legitimate tasks such as filling in, signing, rotating or compressing a document; the fingerprint shows which software saved the file, not what was changed."
+    },
+    "ONLINE_EDITOR_OR_UNLOCKER": {
+      "title": "Online editor or protection-removal tool",
+      "shows": "Revision %{revision} was saved by %{label} (metadata %{matched_on}: “%{value}”), a web service or a tool that removes PDF protection.",
+      "does_not_prove": "These services are often used innocently (to merge, compress or convert files); the match shows the file passed through such a tool, not that its content was altered. Metadata can also be typed by hand."
+    },
+    "PRODUCER_STRUCTURE_MISMATCH": {
+      "title": "Structure does not match the declared producer",
+      "shows": "Revision %{revision} declares %{label}, but its internal structure differs from what that software is known to write: %{traits}.",
+      "does_not_prove": "Optimisers, repair tools and later re-saves change the structure without changing the metadata, and versions of the same program differ; this suggests the declared producer is not the last program that wrote the file, not that the content was falsified."
+    },
+    "UNKNOWN_PRODUCER": {
+      "title": "Producer not in the fingerprint database",
+      "shows": "The producer “%{producer}” (revision %{revision}) is not in the fingerprint database used for this analysis.",
+      "does_not_prove": "The database covers a limited set of programs; an unknown producer is not suspicious in itself."
+    },
+    "XREF_OFFSETS_INCONSISTENT": {
+      "title": "Cross-reference data inconsistent",
+      "shows": "In revision(s) %{revisions}, the cross-reference data does not point at the objects it lists, or startxref points to the wrong place. The objects were located by scanning the file, and every case is listed in the warnings.",
+      "does_not_prove": "Buggy writers and damaged transfers also produce wrong offsets; this shows the file was not written cleanly by a standard tool, not that it was manipulated."
+    },
+    "HYBRID_XREF": {
+      "title": "Hybrid cross-reference",
+      "shows": "Revision(s) %{revisions} use both a classic cross-reference table and a cross-reference stream (/XRefStm), so older and newer readers may see different objects.",
+      "does_not_prove": "Some mainstream writers produce hybrid files for compatibility; the analysis compares both views and reports differences in the warnings."
+    },
+    "DATA_AFTER_FINAL_EOF": {
+      "title": "Data after the end of the file",
+      "shows": "%{bytes} bytes follow the last %%EOF marker. PDF readers ignore them, so they are not displayed.",
+      "does_not_prove": "Transfer tools and some writers append padding or log data; this does not show that the extra bytes are hidden content, but they should be examined separately."
+    },
+    "CONTENT_CHANGED_AFTER_SIGNATURE": {
+      "title": "Content changed after signing",
+      "shows": "Signature %{field} covers an earlier revision; revision(s) %{revisions}, added afterwards, change page content or document structure, which the signature does not cover.",
+      "does_not_prove": "The signature remains mathematically valid for the signed revision; this does not show who made the later changes or whether the signer agreed to them. Compare the signed revision with the final one."
+    },
+    "SIGNATURE_INTEGRITY_FAILED": {
+      "title": "Signature integrity check failed",
+      "shows": "Signature %{field} failed an integrity check (%{reason}). digest_mismatch: the signed bytes no longer match the digest stored in the signature; signature_invalid: the signature value does not verify with the signer's public key; byterange_*: the signed byte range does not cover exactly one revision minus the signature itself.",
+      "does_not_prove": "This shows the signature does not protect the bytes as they are now; it does not show who altered them, and a damaged transfer can also cause it."
+    },
+    "SIGNATURE_PRESENT_TRUST_NOT_VERIFIED": {
+      "title": "Digital signature present (trust not verified)",
+      "shows": "The file contains signature %{field}, signed by %{signer}. Its byte coverage and cryptographic integrity are reported separately.",
+      "does_not_prove": "This tool does not validate the certificate chain, revocation or the signer's identity; a signature can be technically intact and still come from an untrusted or self-made certificate."
+    },
+    "DOCMDP_VIOLATION": {
+      "title": "Changes not allowed by the certification signature",
+      "shows": "Signature %{field} certifies the document with permission level %{level} (1 = no changes, 2 = form filling and signing, 3 = also annotations), but revision(s) %{revisions} contain changes outside that level.",
+      "does_not_prove": "The classification of changes is heuristic and some PDF viewers apply permissions differently; this shows a conflict with the declared permissions, not intent."
+    },
+    "JAVASCRIPT_PRESENT": {
+      "title": "JavaScript present",
+      "shows": "%{count} object(s) contain JavaScript actions (%{objects}).",
+      "does_not_prove": "Forms often use JavaScript for calculations and validation; it does not show malicious behaviour. Analyse the scripts in an isolated environment."
+    },
+    "LAUNCH_ACTION": {
+      "title": "Launch action",
+      "shows": "%{count} object(s) contain a /Launch action that asks the viewer to open a file or run a program (%{objects}).",
+      "does_not_prove": "Most viewers block the action or ask first; it shows that an attempt is defined, not that it ran or what it would do."
+    },
+    "EMBEDDED_FILES": {
+      "title": "Embedded files",
+      "shows": "The PDF contains %{count} embedded file(s) (attachments).",
+      "does_not_prove": "Attachments are a normal PDF feature; they are not necessarily visible in the document and should be extracted and examined separately."
+    },
+    "INVISIBLE_TEXT": {
+      "title": "Invisible text",
+      "shows": "Page %{page} draws %{count} text item(s) that cannot be seen: invisible rendering mode (3 Tr), white fill or fully transparent fill.",
+      "does_not_prove": "OCR layers on scanned pages and accessibility text are invisible by design, and white text can sit on a dark background; this does not by itself show an attempt to hide content."
+    },
+    "TEXT_OVER_SCANNED_IMAGE": {
+      "title": "Text over a scanned image",
+      "shows": "Page %{page} is drawn mainly by one image that covers most of the page and also contains text; the text is first present in revision %{text_revision}.",
+      "does_not_prove": "Scanners and OCR software add a text layer to scanned pages to make them searchable; text added in a later revision deserves a visual comparison, but neither case proves alteration."
+    },
+    "FONT_ADDED_IN_LATER_REVISION": {
+      "title": "Font added in a later revision",
+      "shows": "Font %{font} first appears in revision %{revision} and is used by page content there.",
+      "does_not_prove": "Editing tools add fonts when a form is filled in, a stamp or comment is added or text is legitimately corrected; this shows that text was written in that revision, not that it falsifies the document."
+    },
+    "SCANNED_PAGES_STRUCTURE_ONLY": {
+      "title": "Scanned pages: structural analysis only",
+      "shows": "%{count} page(s) (%{pages}) consist of a single large image without text.",
+      "does_not_prove": "Changes inside the pixels of an image (for example retouching before or after scanning) are not detected by this structural analysis."
+    },
+    "ENCRYPTED_PARTIAL_ANALYSIS": {
+      "title": "Encrypted document: partial analysis",
+      "shows": "The document is encrypted (/Encrypt). Its structure, revisions and signature byte ranges were analysed, but encrypted strings and streams (metadata, page content, object streams) were not decrypted.",
+      "does_not_prove": "Encryption is common and legitimate; findings that depend on decrypted content could not be checked and are missing for that reason only."
+    },
+    "NOT_A_PDF": {
+      "title": "Not a PDF file",
+      "shows": "No %PDF- header was found in the first 1024 bytes, so the file was not analysed as a PDF.",
+      "does_not_prove": "The file may be another format with a .pdf name, or a damaged PDF; examine it with a tool suited to its real type."
     }
   },
   "limitations": {
     "SIGNATURE_TABLE_LIMITED": "Type detection uses a limited table of common file signatures; unknown types are reported as unknown, not as suspicious.",
     "TIMESTAMPS_FROM_FILESYSTEM": "Modification times come from the file system of the examined copy and may differ from the original source.",
     "CLEAN_RESULT_IS_NOT_AUTHENTICITY": "A result without findings does not prove that a file is authentic or unaltered before acquisition.",
-    "TIMESTAMP_PROVES_EXISTENCE_ONLY": "A trusted timestamp proves the audit log existed in this exact form at the stated time; it does not prove that the examined copy matches the original source."
+    "TIMESTAMP_PROVES_EXISTENCE_ONLY": "A trusted timestamp proves the audit log existed in this exact form at the stated time; it does not prove that the examined copy matches the original source.",
+    "NO_FINDING_IS_NOT_AUTHENTICITY": "The absence of findings does not prove that a PDF is authentic or unaltered: a document can be forged before it is saved, or re-created so that no trace remains.",
+    "FLATTENED_OR_REGENERATED_PDF_LOSES_HISTORY": "When a PDF is printed to PDF, flattened, optimised or regenerated, its earlier revisions and most editing traces are lost; only its last state can be examined.",
+    "FINGERPRINT_DB_COVERAGE": "Producer fingerprints come from a limited database (vendor documentation and files generated by Rakvor); producer strings can be typed by hand, and unknown or spoofed values cannot be recognised.",
+    "SIGNATURE_TRUST_NOT_VALIDATED": "Digital signatures are checked for byte coverage and cryptographic integrity only; certificate chains, revocation and the signer's identity are not validated.",
+    "RENDERING_PAGE_CAP": "The visual comparison between revisions renders only a limited number of pages per revision; pages beyond that limit are compared structurally only."
   },
   "brand": {
     "descriptor": "FORENSICS | INCIDENT RESPONSE | SECURITY",

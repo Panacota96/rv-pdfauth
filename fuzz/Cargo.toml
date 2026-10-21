@@ -1,0 +1,28 @@
+# cargo-fuzz target for the PDF layer (nightly only, not part of the workspace or of CI):
+#   cargo install cargo-fuzz
+#   cargo +nightly fuzz run analyze -- -max_total_time=600
+# Seed the corpus with the samples: mkdir -p fuzz/corpus/analyze && cp examples/sample/evidence/*.pdf fuzz/corpus/analyze/
+# The stable stand-in that runs in CI is src/pdf/tests/no_panic.rs.
+[package]
+name = "rv-pdfauth-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rv-pdfauth-pdf = { path = "../src/pdf" }
+
+# Keep this crate out of the main workspace.
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "analyze"
+path = "fuzz_targets/analyze.rs"
+test = false
+doc = false
+bench = false

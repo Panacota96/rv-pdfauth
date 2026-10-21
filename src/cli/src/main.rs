@@ -288,6 +288,10 @@ struct ScanArgs {
 }
 
 fn main() -> ExitCode {
+    // Worker child (PDF analysis in an isolated process): dispatched before clap sees the arguments.
+    if std::env::args_os().nth(1).is_some_and(|a| a == "worker") {
+        std::process::exit(rv_pdfauth_core::worker::worker_main());
+    }
     let cli = Cli::parse();
     ExitCode::from(match cli.command {
         Command::Scan(a) => scan(a),
@@ -363,7 +367,12 @@ fn scan(a: ScanArgs) -> u8 {
             .as_ref()
             .and_then(|_| password(&a.sign_pass_env)),
         sign_cert: a.sign_cert.clone(),
-        domain: rv_pdfauth_core::analyzer::DomainOptions::default(),
+        domain: rv_pdfauth_core::analyzer::DomainOptions {
+            isolation: std::env::current_exe()
+                .map(|exe| rv_pdfauth_core::analyzer::Isolation::Subprocess { exe })
+                .unwrap_or_default(),
+            ..Default::default()
+        },
     };
 
     let bar = match a.progress {

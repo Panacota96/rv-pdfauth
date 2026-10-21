@@ -1,0 +1,17 @@
+[package]
+name = "rv-pdfauth-render"
+description = "RV PDFAuth renderer: PDFium page rendering (loaded at run time) and pixel diff between revisions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[lib]
+name = "rv_pdfauth_render"
+path = "src/lib.rs"
+
+[dependencies]
+pdfium-render.workspace = true
+png.workspace = true
+serde.workspace = true

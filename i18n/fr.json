@@ -108,6 +108,21 @@
       "title": "Fichier illisible",
       "shows": "La lecture a échoué : %{error}.",
       "does_not_prove": "Cela ne prouve pas que le fichier est endommagé ; des droits d'accès ou un verrou peuvent en être la cause."
+    },
+    "PARSER_FAILED": {
+      "title": "Analyse du PDF non terminée",
+      "shows": "L'analyse isolée de ce fichier s'est arrêtée avant la fin (motif : %{reason}, code de sortie %{exit_code}). Le fichier a été haché et son enregistrement d'intégrité est complet ; la structure du PDF, ses révisions et la comparaison visuelle n'ont pas été entièrement analysées.",
+      "does_not_prove": "Cela ne prouve pas que le fichier est malveillant ou falsifié : un fichier endommagé, inhabituel ou très volumineux peut épuiser les limites de temps ou de mémoire. Relancez avec des limites plus élevées ou examinez le fichier manuellement."
+    },
+    "VISUAL_CHANGE_BETWEEN_REVISIONS": {
+      "title": "Changement visible entre révisions",
+      "shows": "Le rendu de la révision %{from_rev} et de la révision %{to_rev} donne des images différentes sur la ou les pages %{pages} (plus forte part modifiée %{changed_ratio_max}) ; pages ajoutées : %{pages_added} ; pages supprimées : %{pages_removed}. Les zones modifiées sont encadrées sur les images de comparaison.",
+      "does_not_prove": "Les mises à jour incrémentales sont normales lors du remplissage d'un formulaire, d'une signature ou de l'ajout de commentaires. Cela ne montre ni qui a fait la modification, ni quand, ni dans quelle intention."
+    },
+    "VISUAL_DIFF_SKIPPED": {
+      "title": "Comparaison visuelle non effectuée",
+      "shows": "La comparaison visuelle page par page des révisions n'a pas pu être faite : %{reason}.",
+      "does_not_prove": "Cela ne montre pas que les révisions sont identiques ou différentes à l'écran ; l'analyse structurelle des révisions n'est pas affectée."
     }
   },
   "limitations": {

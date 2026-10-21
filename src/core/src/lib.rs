@@ -12,13 +12,17 @@ pub mod analyzer;
 pub mod audit;
 pub mod env;
 pub mod events;
+pub mod fingerprints;
 pub mod hash;
 pub mod i18n;
 pub mod input;
+pub mod pdfscan;
 pub mod report;
 pub mod run;
 pub mod time;
 pub mod trust;
+pub mod visual;
+pub mod worker;
 
 pub use events::Event;
 pub use hash::HashAlgo;

@@ -1,0 +1,74 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 112 >>
+stream
+BT /F1 16 Tf 20 160 Td (INVOICE 2026-117) Tj 0 -40 Td (CLIENT: EXAMPLE SAS) Tj 0 -40 Td (TOTAL 100.00 EUR) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Producer (RV fixture writer 1.0) /CreationDate (D:20260101120000Z) >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000000410 00000 n 
+0000000480 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R /Info 6 0 R /ID [<5256464958545552455331303030303031><5256464958545552455331303030303031>] >>
+startxref
+569
+%%EOF
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 7 0 R] /Count 2 >>
+endobj
+4 0 obj
+<< /Length 145 >>
+stream
+BT /F1 16 Tf 20 160 Td (INVOICE 2026-117) Tj 0 -40 Td (CLIENT: EXAMPLE SAS) Tj 0 -40 Td (TOTAL 900.00 EUR) Tj ET 0.8 0.1 0.1 rg 200 20 80 30 re f
+endstream
+endobj
+6 0 obj
+<< /Producer (Other Editor 9.1) /CreationDate (D:20260101120000Z) /ModDate (D:20260315093000Z) >>
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 5 0 R >> >> /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 48 >>
+stream
+BT /F1 16 Tf 20 160 Td (ANNEX ADDED LATER) Tj ET
+endstream
+endobj
+xref
+0 1
+0000000000 65535 f 
+2 1
+0000000863 00000 n 
+4 1
+0000000926 00000 n 
+6 3
+0000001122 00000 n 
+0000001235 00000 n 
+0000001361 00000 n 
+trailer
+<< /Size 9 /Root 1 0 R /Info 6 0 R /Prev 569 /ID [<5256464958545552455331303030303031><5256464958545552455331303030303031>] >>
+startxref
+1459
+%%EOF

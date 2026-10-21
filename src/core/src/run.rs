@@ -371,7 +371,7 @@ pub fn run(
             }
         }
         let codes: Vec<String> = result.findings.iter().map(|f| f.code.clone()).collect();
-        result.audit_last_seq = log.record("item_analyzed", Some(&path_s), json!({"index": item.index, "detected_type": result.detected_type, "extension": result.extension, "findings": result.findings, "status": result.status()})).map_err(io)?;
+        result.audit_last_seq = log.record("item_analyzed", Some(&path_s), json!({"index": item.index, "detected_type": result.detected_type, "extension": result.extension, "findings": result.findings, "status": result.status(), "analysis": crate::analyzer::audit_summary(&result.details)})).map_err(io)?;
         sink(&Event::ItemFinished {
             index: item.index,
             path: path_s,

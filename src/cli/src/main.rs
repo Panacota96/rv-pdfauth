@@ -400,7 +400,8 @@ struct AnalyzeArgs {
     no_timestamp: bool,
 
     /// Examiner's certificate (.p12/.pfx, RSA) used to sign every PDF report. The password is
-    /// read from the environment variable named by --sign-pass-env, or asked for interactively.
+    /// read from the environment variable named by --sign-pass-env, or asked for interactively
+    /// on the terminal without echo.
     /// Default: none (PDFs are not signed)
     /// Example: --sign-cert C:\certs\ana-ruiz.p12
     #[arg(long, value_name = "P12", verbatim_doc_comment)]
@@ -952,10 +953,9 @@ fn password(env: &str) -> Option<String> {
     }
     use std::io::IsTerminal;
     if std::io::stdin().is_terminal() {
-        eprint!("Certificate password: ");
-        let mut line = String::new();
-        std::io::stdin().read_line(&mut line).ok()?;
-        return Some(line.trim_end_matches(['\r', '\n']).to_string());
+        // Read from the controlling terminal with echo switched off (/dev/tty on Unix, CONIN$ on Windows):
+        // the password never appears on screen, in a terminal scroll-back or in a screen recording.
+        return rpassword::prompt_password("Certificate password (input hidden): ").ok();
     }
     None
 }

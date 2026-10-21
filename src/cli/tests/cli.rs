@@ -559,3 +559,69 @@ fn case_folder_analysis_verify_case_and_tampering() {
         .code(3)
         .stdout(predicate::str::contains("registry.json"));
 }
+
+/// The certificate password typed at the interactive prompt is not echoed. The binary runs on a
+/// pseudo-terminal (Python `pty`), so the old line-mode prompt would have echoed the typed text back.
+#[cfg(unix)]
+#[test]
+fn certificate_password_prompt_does_not_echo() {
+    let py = std::env::var("RV_TEST_PYTHON").unwrap_or_else(|_| "python3".into());
+    if !std::process::Command::new(&py)
+        .args(["-c", "import pty"])
+        .status()
+        .is_ok_and(|s| s.success())
+    {
+        eprintln!("skipping: no Python with pty ({})", py);
+        return;
+    }
+    let out = tempfile::tempdir().unwrap();
+    let script = r#"
+import os, pty, sys, time
+exe, args = sys.argv[1], sys.argv[1:]
+pid, fd = pty.fork()
+if pid == 0:
+    os.environ["RV_NO_TIMESTAMP"] = "1"
+    os.environ.pop("RV_SIGN_PASSWORD", None)
+    os.execv(exe, args)
+buf = b""
+deadline = time.time() + 60
+while b"password" not in buf.lower() and time.time() < deadline:
+    try:
+        buf += os.read(fd, 4096)
+    except OSError:
+        break
+time.sleep(0.5)  # let the prompt switch echo off before typing
+os.write(fd, b"typed-secret-123\n")
+while True:
+    try:
+        chunk = os.read(fd, 4096)
+    except OSError:
+        break
+    if not chunk:
+        break
+    buf += chunk
+_, status = os.waitpid(pid, 0)
+sys.stdout.write(buf.decode("utf-8", "replace"))
+sys.stdout.write("\nEXIT=%d\n" % os.waitstatus_to_exitcode(status))
+"#;
+    let res = std::process::Command::new(&py)
+        .arg("-c")
+        .arg(script)
+        .arg(assert_cmd::cargo::cargo_bin("rv-pdfauth"))
+        .args(["analyze", "-i"])
+        .arg(sample())
+        .args(["--progress", "none", "--sign-cert"])
+        .arg(out.path().join("missing.p12"))
+        .arg("-o")
+        .arg(out.path())
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&res.stdout);
+    assert!(text.contains("input hidden"), "no prompt: {}", text);
+    assert!(
+        !text.contains("typed-secret-123"),
+        "the password was echoed: {}",
+        text
+    );
+    assert!(text.contains("EXIT=1"), "{}", text);
+}

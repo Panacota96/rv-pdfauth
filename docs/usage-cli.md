@@ -174,7 +174,8 @@ Options:
 
       --sign-cert <P12>
           Examiner's certificate (.p12/.pfx, RSA) used to sign every PDF report. The password is
-          read from the environment variable named by --sign-pass-env, or asked for interactively.
+          read from the environment variable named by --sign-pass-env, or asked for interactively
+          on the terminal without echo.
           Default: none (PDFs are not signed)
           Example: --sign-cert C:\certs\ana-ruiz.p12
 

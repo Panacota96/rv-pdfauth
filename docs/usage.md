@@ -259,7 +259,8 @@ file: it is the evidence that the time is genuine.
 
 `--sign-cert <file.p12|.pfx>` signs **every PDF report** (statistics, technical, summary, custody) with your own
 certificate (RSA keys only). The password is read from the environment variable named by `--sign-pass-env`
-(default `RV_SIGN_PASSWORD`) or asked for on the terminal (the prompt echoes what you type: prefer the variable).
+(default `RV_SIGN_PASSWORD`) or asked for on the terminal without echo (`Certificate password (input hidden):`, read from the console with echo off;
+the GUI field is masked too).
 It is never logged; the log records `signing_certificate_loaded` with the subject and the certificate's SHA-256.
 A wrong password stops the run (`run_failed`, exit 1) before any evidence is read. In the GUI: *5. Trust →
 Certificate…*.

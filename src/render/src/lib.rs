@@ -222,9 +222,11 @@ mod tests {
 
     #[test]
     fn candidates_skip_the_working_directory() {
-        let c = library_candidates(None, Some(Path::new("/opt/rv/bin/rv-pdfauth")));
-        assert_eq!(c[0], Path::new("/opt/rv/bin").join(library_file_name()));
-        assert_eq!(c[1], Path::new("/opt/rv").join(library_file_name()));
+        // "/opt/rv" is not absolute on Windows (no drive letter): build a platform-absolute base.
+        let base = std::env::temp_dir().join("rv");
+        let c = library_candidates(None, Some(&base.join("bin").join("rv-pdfauth")));
+        assert_eq!(c[0], base.join("bin").join(library_file_name()));
+        assert_eq!(c[1], base.join(library_file_name()));
         assert!(c.iter().all(|p| p.is_absolute()));
     }
 

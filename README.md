@@ -5,7 +5,7 @@
 <!-- /forge:description -->
 
 [![CI](https://github.com/Panacota96/rv-pdfauth/actions/workflows/ci.yml/badge.svg)](https://github.com/Panacota96/rv-pdfauth/actions/workflows/ci.yml)
-![License](https://img.shields.io/badge/license-Apache--2.0-blue)
+![License](https://img.shields.io/badge/license-Rakvor%20source--auditable-6B00FF)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6)
 
 ```mermaid
@@ -159,4 +159,4 @@ rv-pdfauth/
 
 - How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md) · Changes: [CHANGELOG.md](CHANGELOG.md)
 - Report a vulnerability privately: [SECURITY.md](SECURITY.md)
-- Licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE).
+- Rakvor Source-Auditable Licence ([LICENSE](LICENSE), draft pending legal review): used locally by Rakvor; customers, courts and their experts may inspect and rebuild the source for audit; no redistribution. Third-party notices: [NOTICE](NOTICE).

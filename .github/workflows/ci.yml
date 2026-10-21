@@ -61,9 +61,16 @@ jobs:
           .\scripts\fetch_pdfium.ps1 -Platform win-x64
           "RV_PDFIUM_PATH=$PWD\third_party\pdfium\win-x64\pdfium.dll" >> $env:GITHUB_ENV
       - name: Unit and integration tests (includes docs/usage-cli.md drift check and trust tests)
+        shell: bash
         env:
           RV_TEST_PYTHON: python
-        run: cargo test --workspace --locked
+        run: |
+          set -o pipefail
+          # Failures are also surfaced as annotations (readable through the API without downloading logs).
+          if ! cargo test --workspace --locked 2>&1 | tee test.log; then
+            grep -E "panicked at|^---- |FAILED|^failures:|assertion|Error:|error:" test.log | head -40 | while IFS= read -r l; do echo "::error title=cargo test::${l}"; done
+            exit 1
+          fi
       - name: Self-test of the hash implementations
         run: cargo run --locked -q -p rv-pdfauth-cli -- self-test
       - name: Sample run

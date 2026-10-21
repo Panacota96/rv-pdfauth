@@ -240,6 +240,11 @@
       "shows": "La révision %{to_rev} est datée %{gap} après la révision %{from_rev} (d'après leurs dates de modification).",
       "does_not_prove": "Les dates des métadonnées sont écrites par le logiciel d'édition à partir de l'horloge de l'ordinateur et peuvent être fixées librement ; l'écart ne prouve ni quand les modifications ont réellement eu lieu ni qui les a faites."
     },
+    "REVISION_DATE_NOT_MONOTONIC": {
+      "title": "Révision datée avant la précédente",
+      "shows": "La révision %{to_rev} a été ajoutée au fichier après la révision %{from_rev}, mais sa date de modification (%{to_date}) est antérieure de %{gap} à celle de la révision %{from_rev} (%{from_date}).",
+      "does_not_prove": "Les dates des métadonnées viennent de l'horloge de l'ordinateur qui a enregistré chaque révision et peuvent être fixées librement ; une horloge mal réglée, une erreur de fuseau horaire ou des dates recopiées par un éditeur peuvent en être la cause. Cela ne prouve pas à lui seul un antidatage volontaire."
+    },
     "PRODUCER_CHANGED_BETWEEN_REVISIONS": {
       "title": "Logiciel différent d'une révision à l'autre",
       "shows": "Le producteur passe de « %{before} » dans la révision %{from_rev} à « %{after} » dans la révision %{to_rev}.",
@@ -370,7 +375,8 @@
     "FLATTENED_OR_REGENERATED_PDF_LOSES_HISTORY": "Lorsqu'un PDF est imprimé en PDF, aplati, optimisé ou régénéré, ses révisions antérieures et la plupart des traces d'édition disparaissent ; seul son dernier état peut être examiné.",
     "FINGERPRINT_DB_COVERAGE": "Les empreintes de producteurs proviennent d'une base limitée (documentation des éditeurs et fichiers générés par Rakvor) ; le producteur peut être saisi à la main, et les valeurs inconnues ou usurpées ne peuvent pas être reconnues.",
     "SIGNATURE_TRUST_NOT_VALIDATED": "Les signatures électroniques ne sont contrôlées que pour la couverture des octets et l'intégrité cryptographique ; la chaîne de certificats, la révocation et l'identité du signataire ne sont pas validées.",
-    "RENDERING_PAGE_CAP": "La comparaison visuelle entre révisions ne rend qu'un nombre limité de pages par révision ; au-delà, les pages ne sont comparées que structurellement."
+    "RENDERING_PAGE_CAP": "La comparaison visuelle entre révisions ne rend qu'un nombre limité de pages par révision ; au-delà, les pages ne sont comparées que structurellement.",
+    "VISUAL_DIFF_UNAVAILABLE": "La comparaison visuelle n'a pas pu être faite pour tout ou partie des révisions de cet élément (moteur de rendu PDF absent ou incapable d'ouvrir une révision) ; ces révisions n'ont été comparées que structurellement, et les fichiers de révision extraits peuvent être comparés à l'œil."
   },
   "brand": {
     "descriptor": "INVESTIGATION NUMÉRIQUE | RÉPONSE AUX INCIDENTS | SÉCURITÉ",

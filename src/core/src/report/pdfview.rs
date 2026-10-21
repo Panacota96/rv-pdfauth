@@ -611,6 +611,32 @@ mod tests {
     }
 
     #[test]
+    fn visual_diff_unavailable_is_an_item_limitation_worded_in_every_language() {
+        let it = item(json!({"revisions": [], "visual": {"status": "skipped",
+            "limitation": crate::visual::UNAVAILABLE}}));
+        let lims = crate::report::item_limitations(&it);
+        assert_eq!(
+            lims.last().map(String::as_str),
+            Some("VISUAL_DIFF_UNAVAILABLE")
+        );
+        assert_eq!(lims.len(), crate::report::LIMITATIONS.len() + 1);
+        assert_eq!(
+            crate::report::item_limitations(&item(json!({"revisions": []}))).len(),
+            crate::report::LIMITATIONS.len()
+        );
+        for l in ["en", "es", "fr"] {
+            let text = catalog(l).limitation("VISUAL_DIFF_UNAVAILABLE");
+            assert!(text.len() > 40 && text != "VISUAL_DIFF_UNAVAILABLE", "{l}");
+        }
+        // Every run-level limitation is worded too.
+        for code in crate::report::LIMITATIONS {
+            for l in ["en", "es", "fr"] {
+                assert_ne!(catalog(l).limitation(code), code, "{l} {code}");
+            }
+        }
+    }
+
+    #[test]
     fn coarse_durations_are_localized() {
         assert_eq!(coarse_duration(catalog("en"), 9 * 86_400 + 5), "9 days");
         assert_eq!(coarse_duration(catalog("en"), 3_600), "1 hour");

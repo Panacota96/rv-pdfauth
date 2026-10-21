@@ -33,6 +33,18 @@ pub const LIMITATIONS: [&str; 9] = [
     "SIGNATURE_TRUST_NOT_VALIDATED",
     "RENDERING_PAGE_CAP",
 ];
+/// Limitations of one item: the run-level list plus the item's own (today: `VISUAL_DIFF_UNAVAILABLE` when
+/// PDFium was missing or could not open / render a revision of this PDF).
+pub fn item_limitations(it: &ItemResult) -> Vec<String> {
+    let mut out: Vec<String> = LIMITATIONS.iter().map(|l| l.to_string()).collect();
+    if let Some(code) = it.details["visual"]["limitation"].as_str()
+        && !out.iter().any(|l| l == code)
+    {
+        out.push(code.to_string());
+    }
+    out
+}
+
 pub const SCHEMA_CUSTODY: &str = "rakvor.item-custody/1";
 const BLANK_TRANSFER_ROWS: usize = 6;
 
@@ -432,6 +444,15 @@ pub fn item_context(lang: &str, run: &RunInfo, it: &ItemResult, audit: &AuditRef
     let c = catalog(lang);
     let mut m = base(c, run);
     m.insert("item".into(), item_view(c, it));
+    m.insert(
+        "limitations".into(),
+        json!(
+            item_limitations(it)
+                .iter()
+                .map(|l| c.limitation(l))
+                .collect::<Vec<_>>()
+        ),
+    );
     m.insert("case".into(), case_view(run));
     m.insert(
         "hash_rows".into(),
@@ -551,7 +572,7 @@ pub fn technical_json(run: &RunInfo, it: &ItemResult) -> Value {
                  "status": it.case_status, "intake_utc": it.intake_utc})),
         "hashes": it.hashes.iter().map(|(a, h)| (a.name().to_string(), json!(h))).collect::<serde_json::Map<_, _>>(),
         "findings": findings_json(it, &run.langs),
-        "limitations": LIMITATIONS,
+        "limitations": item_limitations(it),
         "audit": {"first_seq": it.audit_first_seq, "last_seq": it.audit_last_seq},
         "pdf": pdfview::pdf_json(it),
         "extracted_files": pdfview::extracted_json(it),

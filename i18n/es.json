@@ -240,6 +240,11 @@
       "shows": "La revisión %{to_rev} tiene una fecha %{gap} posterior a la de la revisión %{from_rev} (según sus fechas de modificación).",
       "does_not_prove": "Las fechas de los metadatos las escribe el programa de edición a partir del reloj del equipo y pueden fijarse a voluntad; el intervalo no prueba cuándo se hicieron realmente los cambios ni quién los hizo."
     },
+    "REVISION_DATE_NOT_MONOTONIC": {
+      "title": "Revisión con fecha anterior a la previa",
+      "shows": "La revisión %{to_rev} se añadió al archivo después de la revisión %{from_rev}, pero su fecha de modificación (%{to_date}) es %{gap} anterior a la de la revisión %{from_rev} (%{from_date}).",
+      "does_not_prove": "Las fechas de los metadatos provienen del reloj del equipo que guardó cada revisión y pueden fijarse a voluntad; un reloj mal configurado, un error de zona horaria o fechas copiadas por un editor pueden producirlo. Por sí solo no demuestra que el documento se haya antedatado a propósito."
+    },
     "PRODUCER_CHANGED_BETWEEN_REVISIONS": {
       "title": "Software distinto entre revisiones",
       "shows": "El productor cambia de «%{before}» en la revisión %{from_rev} a «%{after}» en la revisión %{to_rev}.",
@@ -370,7 +375,8 @@
     "FLATTENED_OR_REGENERATED_PDF_LOSES_HISTORY": "Cuando un PDF se imprime a PDF, se aplana, se optimiza o se regenera, se pierden sus revisiones anteriores y la mayoría de las huellas de edición; solo puede examinarse su último estado.",
     "FINGERPRINT_DB_COVERAGE": "Las huellas de productores provienen de una base limitada (documentación de fabricantes y archivos generados por Rakvor); el productor puede escribirse a mano, y los valores desconocidos o falsificados no pueden reconocerse.",
     "SIGNATURE_TRUST_NOT_VALIDATED": "Las firmas digitales solo se verifican en cuanto a cobertura de bytes e integridad criptográfica; no se validan las cadenas de certificados, la revocación ni la identidad del firmante.",
-    "RENDERING_PAGE_CAP": "La comparación visual entre revisiones representa solo un número limitado de páginas por revisión; las páginas que superan ese límite solo se comparan estructuralmente."
+    "RENDERING_PAGE_CAP": "La comparación visual entre revisiones representa solo un número limitado de páginas por revisión; las páginas que superan ese límite solo se comparan estructuralmente.",
+    "VISUAL_DIFF_UNAVAILABLE": "No se pudo hacer la comparación visual de algunas o todas las revisiones de este elemento (faltaba el motor de representación de PDF o no pudo abrir una revisión); esas revisiones solo se compararon estructuralmente, y los archivos de revisión extraídos pueden compararse a simple vista."
   },
   "brand": {
     "descriptor": "FORENSE | RESPUESTA A INCIDENTES | SEGURIDAD",

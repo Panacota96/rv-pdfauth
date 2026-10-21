@@ -93,6 +93,36 @@ fn revision_time_gap() {
 }
 
 #[test]
+fn revision_date_not_monotonic() {
+    // Revision 2 (appended later in the file) claims a save 3 days before revision 1.
+    let b = two_revisions(
+        "<< /Producer (pypdf) /CreationDate (D:20260101100000Z) /ModDate (D:20260110100000Z) >>",
+        "<< /Producer (pypdf) /CreationDate (D:20260101100000Z) /ModDate (D:20260107100000Z) >>",
+    );
+    let r = analyze(&b, &PdfOptions::default());
+    let f = r
+        .findings
+        .iter()
+        .find(|f| f.code == "REVISION_DATE_NOT_MONOTONIC")
+        .expect("non-monotonic revision dates");
+    assert_eq!(f.severity, rv_pdfauth_pdf::Severity::Medium);
+    assert_eq!(f.params["from_rev"], "1");
+    assert_eq!(f.params["to_rev"], "2");
+    assert_eq!(f.params["from_date"], "2026-01-10T10:00:00Z");
+    assert_eq!(f.params["to_date"], "2026-01-07T10:00:00Z");
+    assert_eq!(f.params["gap"], "3 d 0 h 0 min");
+    assert!(!has(&b, "REVISION_TIME_GAP"));
+    // Equal or later dates give no finding.
+    for later in ["D:20260110100000Z", "D:20260111100000Z"] {
+        let ok = two_revisions(
+            "<< /Producer (pypdf) /ModDate (D:20260110100000Z) >>",
+            &format!("<< /Producer (pypdf) /ModDate ({}) >>", later),
+        );
+        assert!(!has(&ok, "REVISION_DATE_NOT_MONOTONIC"), "{}", later);
+    }
+}
+
+#[test]
 fn moddate_before_creationdate() {
     let b = simple(
         "",

@@ -238,6 +238,10 @@ PDF", which erases all history. The tool's limitations are printed in every repo
 - When a PDF is printed to PDF, flattened, optimised or regenerated, its earlier revisions and most editing
   traces are lost; only its last state can be examined.
 - Dates and producer names are written by the software that saved the file and can be set freely.
+
+Item-specific limitations are added where they apply: `VISUAL_DIFF_UNAVAILABLE` is printed in an item's reports
+(and listed in `technical.json` → `limitations`) when PDFium was missing or could not open or render a revision, so
+part or all of the visual comparison is missing.
 - Changes inside the pixels of a scanned image (retouching) are not detected.
 - The copy examined is compared with nothing before intake: integrity is proven **from intake onward**.
 
@@ -519,9 +523,10 @@ zone is missing, either the wall clocks or the instants may match.
 | `MODDATE_BEFORE_CREATIONDATE` | In any revision, Info ModDate < CreationDate, or XMP ModifyDate < CreateDate (each pair reported once) | high |
 | `REVISION_TIME_GAP` | Consecutive revisions dated ≥ 3600 s apart; date = Info ModDate, else XMP ModifyDate, else (revision 1 only) CreationDate | info |
 | `PRODUCER_CHANGED_BETWEEN_REVISIONS` | Info Producer of revision *k* ≠ that of *k−1* (exact string) | medium |
+| `REVISION_DATE_NOT_MONOTONIC` | Revision *k* dated **earlier** than revision *k−1* (same date rule as `REVISION_TIME_GAP`; equal dates give nothing). An incremental update is appended after its predecessor, so its save date should not go back in time | medium |
 
-A revision dated **before** the previous one gives no finding in this version (the GUI timeline shows the gap in
-red); check the revision table of the technical report.
+The GUI timeline also shows such a negative interval in red, and the revision table of the technical report gives
+both dates.
 
 ## B8 Producer and editor fingerprints
 

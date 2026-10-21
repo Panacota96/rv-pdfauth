@@ -20,9 +20,9 @@ fn installer_removes_its_path_entry_on_uninstall() {
     assert!(iss.contains("procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);"));
     assert!(iss.contains("if CurUninstallStep = usUninstall then"));
     assert!(iss.contains("RemoveFromPath(ExpandConstant('{app}'));"));
-    assert!(iss.contains(
-        "RegWriteExpandStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', Paths);"
-    ));
+    assert!(
+        iss.contains("RegWriteExpandStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', Paths);")
+    );
     assert!(iss.contains("ChangesEnvironment=yes"));
 }
 
@@ -64,8 +64,5 @@ fn path_removal_keeps_the_other_entries() {
     );
     assert_eq!(remove_from_path(r"C:\bin;C:\other", app), None);
     // A longer folder that only starts with the install path is not touched.
-    assert_eq!(
-        remove_from_path(&format!(r"{}-old;C:\bin", app), app),
-        None
-    );
+    assert_eq!(remove_from_path(&format!(r"{}-old;C:\bin", app), app), None);
 }

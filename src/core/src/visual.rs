@@ -23,6 +23,9 @@ fn pin(key: &str) -> Option<&'static str> {
     })
 }
 
+/// Item-level limitation code (worded in i18n `limitations`) when the visual comparison is missing in part or whole.
+pub const UNAVAILABLE: &str = "VISUAL_DIFF_UNAVAILABLE";
+
 pub struct VisualOutcome {
     pub details: Value,
     pub findings: Vec<Finding>,
@@ -72,7 +75,7 @@ fn skipped(reason: String, params: &DiffParams, opts: &DomainOptions) -> VisualO
             Finding::new("VISUAL_DIFF_SKIPPED", Severity::Info).with("reason", reason.clone()),
         ],
         details: json!({"status": "skipped", "reason": reason, "dpi": opts.dpi, "max_pages": opts.max_pages,
-            "params": params, "limitation": "VISUAL_DIFF_UNAVAILABLE"}),
+            "params": params, "limitation": UNAVAILABLE}),
     }
 }
 
@@ -211,10 +214,19 @@ pub(crate) fn visual_diff(
         }
         pairs.push(pair);
     }
-    VisualOutcome {
-        findings,
-        details: json!({"status": "done", "renderer": renderer_info, "dpi": opts.dpi,
-            "max_pages": opts.max_pages, "params": params, "pairs_compared": pairs.len(),
-            "pages_changed": pages_changed_total, "pairs": pairs}),
+    // A revision PDFium could not open, or a page it could not render, leaves part of the item without a
+    // visual comparison: the item's reports then print the VISUAL_DIFF_UNAVAILABLE limitation.
+    let incomplete = pairs.iter().any(|p| {
+        p["status"] == "error"
+            || p["pages"]
+                .as_array()
+                .is_some_and(|pages| pages.iter().any(|x| x["status"] == "error"))
+    });
+    let mut details = json!({"status": "done", "renderer": renderer_info, "dpi": opts.dpi,
+        "max_pages": opts.max_pages, "params": params, "pairs_compared": pairs.len(),
+        "pages_changed": pages_changed_total, "pairs": pairs});
+    if incomplete {
+        details["limitation"] = json!(UNAVAILABLE);
     }
+    VisualOutcome { findings, details }
 }

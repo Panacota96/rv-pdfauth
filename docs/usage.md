@@ -197,6 +197,7 @@ is the overreach to avoid in a report. The exact wording printed in reports is i
 | `METADATA_INFO_XMP_MISMATCH` (medium) | Which field; the XMP history (`technical.json`) and producer of each revision | Falsified content — many tools update only one store |
 | `MODDATE_BEFORE_CREATIONDATE` (high) | Raw values and time zones in the revision table; the producer's known date bugs | Deliberate backdating (clocks, zones, templates) |
 | `REVISION_TIME_GAP` (info) | Whether the gap fits the client's account (e.g. signed on day 1, amended on day 9) | When the change really happened — dates are set by the saving software |
+| `REVISION_DATE_NOT_MONOTONIC` (medium) | Both dates in the revision table; the clock and time zone of the machine that saved the later revision | Backdating — a wrong clock or an editor copying old dates does this too |
 | `PRODUCER_CHANGED_BETWEEN_REVISIONS` (medium) | Which software saved which revision; is it a known workflow (sign tool, form filler)? | Who used the software |
 | `EDITOR_FINGERPRINT` (medium) | What that revision changed (visual diff, objects added/changed) | That content was changed — editors also fill, sign, rotate, compress |
 | `ONLINE_EDITOR_OR_UNLOCKER` (high) | The matched string and field; whether the client used such a service; what that revision changed | Alteration of content; the string can be typed by hand |

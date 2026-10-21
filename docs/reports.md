@@ -89,6 +89,7 @@ the exact rules and thresholds: [theory.md](theory.md).
 | `METADATA_INFO_XMP_MISMATCH` | medium | Info and XMP disagree on producer, creator or dates (final revision) |
 | `MODDATE_BEFORE_CREATIONDATE` | high | a modification date earlier than the creation date (Info or XMP) |
 | `REVISION_TIME_GAP` | info | consecutive revisions dated at least 1 hour apart |
+| `REVISION_DATE_NOT_MONOTONIC` | medium | a revision is dated earlier than the revision before it |
 | `PRODUCER_CHANGED_BETWEEN_REVISIONS` | medium | the Info producer changes between consecutive revisions |
 | `EDITOR_FINGERPRINT` | medium | a revision was saved by a known PDF editor |
 | `ONLINE_EDITOR_OR_UNLOCKER` | high | a revision was saved by an online editor or protection-removal tool |

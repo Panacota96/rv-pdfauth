@@ -40,6 +40,10 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; Flags: unchecked
 [Files]
 Source: "{#SourceDir}\target\release\rv-pdfauth.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\target\release\rv-pdfauth-gui.exe"; DestDir: "{app}"; Flags: ignoreversion
+; PDFium (BSD-3, loaded at run time for the visual diff) and its licences: see NOTICE.
+Source: "{#SourceDir}\target\release\pdfium.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\third_party\pdfium\win-x64\licenses\*"; DestDir: "{app}\licenses\pdfium"
+Source: "{#SourceDir}\third_party\pdfium\win-x64\LICENSE-pdfium-binaries.txt"; DestDir: "{app}\licenses\pdfium"
 Source: "{#SourceDir}\README.md"; DestDir: "{app}"
 Source: "{#SourceDir}\LICENSE"; DestDir: "{app}"
 Source: "{#SourceDir}\NOTICE"; DestDir: "{app}"

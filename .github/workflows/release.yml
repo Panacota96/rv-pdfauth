@@ -47,6 +47,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build (static CRT, see .cargo/config.toml)
         run: cargo build --release --locked -p rv-pdfauth-cli -p rv-pdfauth-gui
+      - name: PDFium next to the executables (pinned tag + SHA-256 in third_party/pdfium/PDFIUM_VERSION.txt)
+        shell: pwsh
+        run: |
+          .\scripts\fetch_pdfium.ps1 -Platform win-x64
+          Copy-Item third_party\pdfium\win-x64\pdfium.dll target\release\
       - name: Code signing of the executables (runs only when the SIGN_PFX_BASE64 secret exists)
         if: env.SIGN_ENABLED == 'true'
         shell: pwsh
@@ -74,14 +79,16 @@ jobs:
         id: v
         shell: pwsh
         run: |
-          $v = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages | Where-Object name -eq 'rv-pdfauth-cli' | Select-Object -ExpandProperty version
+          $v = (Get-Content version.txt -Raw).Trim()
           "version=$v" >> $env:GITHUB_OUTPUT
       - name: Portable zip
         shell: pwsh
         run: |
           $name = "rv-pdfauth-${{ steps.v.outputs.version }}-windows-x64"
           New-Item -ItemType Directory -Force dist\$name | Out-Null
-          Copy-Item target\release\rv-pdfauth.exe, target\release\rv-pdfauth-gui.exe, README.md, LICENSE, NOTICE, CHANGELOG.md dist\$name
+          Copy-Item target\release\rv-pdfauth.exe, target\release\rv-pdfauth-gui.exe, target\release\pdfium.dll, README.md, LICENSE, NOTICE, CHANGELOG.md dist\$name
+          New-Item -ItemType Directory -Force dist\$name\licenses\pdfium | Out-Null
+          Copy-Item third_party\pdfium\win-x64\licenses\*, third_party\pdfium\win-x64\LICENSE-pdfium-binaries.txt dist\$name\licenses\pdfium
           Copy-Item -Recurse docs, examples dist\$name
           Remove-Item -Recurse -Force dist\$name\examples\sample\out -ErrorAction SilentlyContinue
           Compress-Archive -Path dist\$name\* -DestinationPath dist\$name.zip

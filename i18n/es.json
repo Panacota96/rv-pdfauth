@@ -108,6 +108,21 @@
       "title": "No se pudo leer el archivo",
       "shows": "La lectura falló: %{error}.",
       "does_not_prove": "No demuestra que el archivo esté dañado; permisos o bloqueos pueden causarlo."
+    },
+    "PARSER_FAILED": {
+      "title": "El análisis del PDF no terminó",
+      "shows": "El análisis aislado de este archivo se detuvo antes de terminar (motivo: %{reason}, código de salida %{exit_code}). Se calculó el hash del archivo y su registro de integridad está completo; la estructura del PDF, sus revisiones y la comparación visual no se analizaron por completo.",
+      "does_not_prove": "No demuestra que el archivo sea malicioso o falso: archivos dañados, inusuales o muy grandes pueden agotar los límites de tiempo o de memoria. Repita con límites más altos o examine el archivo manualmente."
+    },
+    "VISUAL_CHANGE_BETWEEN_REVISIONS": {
+      "title": "Cambio visible entre revisiones",
+      "shows": "Al representar la revisión %{from_rev} y la revisión %{to_rev} se obtienen imágenes distintas en la(s) página(s) %{pages} (mayor proporción cambiada %{changed_ratio_max}); páginas añadidas: %{pages_added}; páginas eliminadas: %{pages_removed}. Las zonas cambiadas están recuadradas en las imágenes de comparación.",
+      "does_not_prove": "Las actualizaciones incrementales son normales al llenar formularios, firmar o añadir comentarios. No demuestra quién hizo el cambio, cuándo ni con qué intención."
+    },
+    "VISUAL_DIFF_SKIPPED": {
+      "title": "Comparación visual no realizada",
+      "shows": "No se pudo hacer la comparación visual página por página de las revisiones: %{reason}.",
+      "does_not_prove": "No demuestra que las revisiones se vean iguales ni distintas; el análisis estructural de las revisiones no se ve afectado."
     }
   },
   "limitations": {

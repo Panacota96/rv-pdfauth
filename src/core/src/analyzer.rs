@@ -6,10 +6,10 @@
 //! A new tool keeps the same `analyze` signature and `Finding` shape so the rest of the
 //! pipeline (audit, reports, CLI, GUI) works unchanged.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
     Info,
@@ -30,7 +30,7 @@ impl Severity {
 }
 
 /// One finding: a stable code (worded in i18n/*.json), a severity and named parameters.
-#[derive(Clone, Debug, Serialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Finding {
     pub code: String,
     pub severity: Severity,
@@ -51,7 +51,9 @@ impl Finding {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, PartialEq)]
+/// Also the payload a worker process prints on stdout (see `worker.rs`), hence Deserialize.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct Analysis {
     pub detected_type: Option<String>,
     pub extension: Option<String>,
@@ -72,7 +74,8 @@ pub struct OutputFile {
 
 /// How heavy analysis runs. Subprocess = `<exe> worker …` per item, so a crash in native code (PDFium) or a
 /// hang cannot stop a bulk run or corrupt the audit log; InProcess is for unit tests.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Isolation {
     #[default]
     InProcess,
@@ -82,7 +85,9 @@ pub enum Isolation {
 }
 
 /// Domain options (FROZEN names; the CLI flags and GUI settings map 1:1 onto them).
-#[derive(Clone, Debug, PartialEq)]
+/// Serialisable: the parent passes them to a worker process as JSON (`--opts`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct DomainOptions {
     pub extract_revisions: bool,
     pub visual_diff: bool,
@@ -128,10 +133,53 @@ pub struct AnalyzeCtx<'a> {
     pub opts: &'a DomainOptions,
 }
 
-/// FROZEN entry point called by run.rs for every readable item. The reference inventory logic below
-/// (`analyze`) stays as the fallback for non-PDF files; the PDF analysis replaces this body.
+/// FROZEN entry point called by run.rs for every readable item. PDF candidates (`%PDF-` header or `.pdf`
+/// extension) get the PDF analysis — in a worker process with [`Isolation::Subprocess`], so a crash, hang or
+/// memory blow-up in the parser or in PDFium becomes a `PARSER_FAILED` finding instead of ending the run.
+/// Everything else keeps the reference inventory logic (`analyze`), in process.
 pub fn analyze_item(ctx: &AnalyzeCtx) -> Analysis {
-    analyze(ctx.file_name, ctx.size, ctx.head)
+    if !crate::pdfscan::is_pdf_candidate(ctx.file_name, ctx.head) {
+        return analyze(ctx.file_name, ctx.size, ctx.head);
+    }
+    match &ctx.opts.isolation {
+        Isolation::InProcess => crate::pdfscan::analyze_pdf(ctx),
+        Isolation::Subprocess { exe } => crate::worker::analyze_in_worker(exe, ctx),
+    }
+}
+
+/// The part of `Analysis::details` that `run.rs` writes into the `item_analyzed` audit entry: which
+/// fingerprint databases (name, version, SHA-256) and which PDFium build (path, SHA-256) were used, how the
+/// worker ended and whether the visual diff ran. Small and float-free, so the audit chain stays canonical.
+pub fn audit_summary(details: &serde_json::Value) -> serde_json::Value {
+    if !details.is_object() {
+        return serde_json::Value::Null;
+    }
+    let mut m = serde_json::Map::new();
+    for k in ["fingerprint_dbs", "worker", "revision_source"] {
+        if let Some(v) = details.get(k) {
+            m.insert(k.into(), v.clone());
+        }
+    }
+    if let Some(v) = details.get("visual") {
+        let mut vis = serde_json::Map::new();
+        for k in [
+            "status",
+            "reason",
+            "renderer",
+            "pairs_compared",
+            "pages_changed",
+        ] {
+            if let Some(x) = v.get(k) {
+                vis.insert(k.into(), x.clone());
+            }
+        }
+        m.insert("visual".into(), vis.into());
+    }
+    if m.is_empty() {
+        serde_json::Value::Null
+    } else {
+        m.into()
+    }
 }
 
 struct Signature {

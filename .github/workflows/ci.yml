@@ -49,10 +49,28 @@ jobs:
           python-version: "3.12"
       - name: Python helpers (independent verifiers + local test TSA/PKI for the trust tests)
         run: pip install blake3 jsonschema pyhanko
+      - name: PDFium (pinned + SHA-256 verified; the visual-diff tests must run, not skip)
+        if: runner.os == 'Linux'
+        run: |
+          bash scripts/fetch_pdfium.sh linux-x64
+          echo "RV_PDFIUM_PATH=$PWD/third_party/pdfium/linux-x64/libpdfium.so" >> "$GITHUB_ENV"
+      - name: PDFium (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          .\scripts\fetch_pdfium.ps1 -Platform win-x64
+          "RV_PDFIUM_PATH=$PWD\third_party\pdfium\win-x64\pdfium.dll" >> $env:GITHUB_ENV
       - name: Unit and integration tests (includes docs/usage-cli.md drift check and trust tests)
+        shell: bash
         env:
           RV_TEST_PYTHON: python
-        run: cargo test --workspace --locked
+        run: |
+          set -o pipefail
+          # Failures are also surfaced as annotations (readable through the API without downloading logs).
+          if ! cargo test --workspace --locked 2>&1 | tee test.log; then
+            grep -E "panicked at|^---- |FAILED|^failures:|assertion|Error:|error:" test.log | head -40 | while IFS= read -r l; do echo "::error title=cargo test::${l}"; done
+            exit 1
+          fi
       - name: Self-test of the hash implementations
         run: cargo run --locked -q -p rv-pdfauth-cli -- self-test
       - name: Sample run
@@ -75,7 +93,11 @@ jobs:
           cargo run --locked -q -p rv-pdfauth-cli -- verify-log "tsa-out/logs/$run"
       - name: Build release binaries (Windows)
         if: runner.os == 'Windows'
-        run: cargo build --release --locked -p rv-pdfauth-cli -p rv-pdfauth-gui
+        shell: pwsh
+        run: |
+          cargo build --release --locked -p rv-pdfauth-cli -p rv-pdfauth-gui
+          # PDFium is loaded from next to the executable.
+          Copy-Item third_party\pdfium\win-x64\pdfium.dll target\release\
       - uses: actions/upload-artifact@v4
         if: runner.os == 'Windows'
         with:
@@ -83,4 +105,7 @@ jobs:
           path: |
             target/release/rv-pdfauth.exe
             target/release/rv-pdfauth-gui.exe
+            target/release/pdfium.dll
+            third_party/pdfium/win-x64/licenses/
+            third_party/pdfium/win-x64/LICENSE-pdfium-binaries.txt
           retention-days: 14

@@ -313,7 +313,12 @@ impl GuiState {
             } else {
                 Some(self.sign_password.clone())
             },
-            domain: rv_pdfauth_core::analyzer::DomainOptions::default(),
+            domain: rv_pdfauth_core::analyzer::DomainOptions {
+                isolation: std::env::current_exe()
+                    .map(|exe| rv_pdfauth_core::analyzer::Isolation::Subprocess { exe })
+                    .unwrap_or_default(),
+                ..Default::default()
+            },
         })
     }
 

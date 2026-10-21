@@ -901,7 +901,7 @@ impl HashInvApp {
                         });
                         let f = pinch * (scroll / 240.0).exp();
                         if (f - 1.0).abs() > 1e-4 {
-                            let a = pointer.map_or(rect.center(), |p| p) - rect.min;
+                            let a = pointer.unwrap_or(rect.center()) - rect.min;
                             zoom_at = Some((f, [a.x, a.y], [rect.width(), rect.height()], size));
                         }
                     }

@@ -4,10 +4,13 @@
 
 ```mermaid
 flowchart LR
-  A[rv-pdfauth] --> B[scan]
+  A[rv-pdfauth] --> B[analyze]
   A --> C[verify-log]
   A --> D[self-test]
   A --> T[timestamp]
+  A --> G[fingerprints]
+  G --> H[(local fingerprint DB)]
+  H --> B
   T --> E
   B --> E[(logs/RUN-ID)]
   B --> F[(reports/RUN-ID)]
@@ -18,23 +21,32 @@ flowchart LR
 
 ```text
 DESCRIPTION:
-  rv-pdfauth reviews a single file, a whole folder (bulk) or a list of files. For every file it:
+  rv-pdfauth looks for signs that a PDF was changed after it was first saved. It reviews a single
+  file, a whole folder (bulk) or a list of files. For every file it:
     1. opens the file read-only and hashes it in one pass with one or two algorithms;
-    2. detects the real file type from its signature (magic bytes);
-    3. flags empty files, extensions that do not match the content, programs hidden under
-       another name and duplicated content;
-    4. writes a technical report and a customer-friendly summary (HTML, PDF and JSON).
-  Each run also writes a statistics report and an audit trail under <OUT>/logs/<RUN-ID>/.
-  Every action is appended to a hash-chained log that `rv-pdfauth verify-log` can check later.
+    2. parses the PDF without changing it: revisions (incremental saves), Info and XMP dates,
+       producer/editor fingerprints, fonts, embedded files, signatures and DocMDP permissions;
+    3. extracts each earlier revision as a byte-exact prefix of the evidence (revisions/rev-NN.pdf);
+    4. renders consecutive revisions with PDFium in an isolated worker process and writes a
+       highlighted image for every page that changed (visual/*.png);
+    5. turns what it saw into findings (signals with a severity, what they show and what they do
+       not prove) and writes a technical review and a customer summary (HTML, PDF and JSON).
+  Each run also writes a statistics report and an audit trail under <OUT>/logs/<RUN-ID>/. Every
+  action is appended to a hash-chained log that `rv-pdfauth verify-log` can check later.
+  The result is a set of signals for an examiner, never a verdict that a document is authentic or
+  forged.
 
 Usage: rv-pdfauth <COMMAND>
 
 Commands:
-  scan        Hash, check and report on a file, a folder or a list of files
-  verify-log  Verify that an audit log (audit.jsonl) has not been edited, truncated or re-ordered
-  self-test   Check every hash algorithm against known-answer test vectors
-  timestamp   Add an RFC 3161 timestamp to a finished run (e.g. after working offline)
-  help        Print this message or the help of the given subcommand(s)
+  analyze       Look for signs of editing in PDF files (a file, a folder or a list) and write the
+                reports
+  fingerprints  Manage the local producer/editor fingerprint database (learn, list, export). Offline
+                only
+  verify-log    Verify that an audit log (audit.jsonl) has not been edited, truncated or re-ordered
+  self-test     Check every hash algorithm against known-answer test vectors
+  timestamp     Add an RFC 3161 timestamp to a finished run (e.g. after working offline)
+  help          Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help
@@ -46,20 +58,26 @@ Options:
 Run `rv-pdfauth <COMMAND> --help` for the options, examples and exit codes of each command.
 ```
 
-## rv-pdfauth scan
+## rv-pdfauth analyze
 
 ```text
 DESCRIPTION:
-  rv-pdfauth reviews a single file, a whole folder (bulk) or a list of files. For every file it:
+  rv-pdfauth looks for signs that a PDF was changed after it was first saved. It reviews a single
+  file, a whole folder (bulk) or a list of files. For every file it:
     1. opens the file read-only and hashes it in one pass with one or two algorithms;
-    2. detects the real file type from its signature (magic bytes);
-    3. flags empty files, extensions that do not match the content, programs hidden under
-       another name and duplicated content;
-    4. writes a technical report and a customer-friendly summary (HTML, PDF and JSON).
-  Each run also writes a statistics report and an audit trail under <OUT>/logs/<RUN-ID>/.
-  Every action is appended to a hash-chained log that `rv-pdfauth verify-log` can check later.
+    2. parses the PDF without changing it: revisions (incremental saves), Info and XMP dates,
+       producer/editor fingerprints, fonts, embedded files, signatures and DocMDP permissions;
+    3. extracts each earlier revision as a byte-exact prefix of the evidence (revisions/rev-NN.pdf);
+    4. renders consecutive revisions with PDFium in an isolated worker process and writes a
+       highlighted image for every page that changed (visual/*.png);
+    5. turns what it saw into findings (signals with a severity, what they show and what they do
+       not prove) and writes a technical review and a customer summary (HTML, PDF and JSON).
+  Each run also writes a statistics report and an audit trail under <OUT>/logs/<RUN-ID>/. Every
+  action is appended to a hash-chained log that `rv-pdfauth verify-log` can check later.
+  The result is a set of signals for an examiner, never a verdict that a document is authentic or
+  forged.
 
-Usage: rv-pdfauth scan [OPTIONS]
+Usage: rv-pdfauth analyze [OPTIONS]
 
 Options:
   -i, --input <PATH>
@@ -93,9 +111,9 @@ Options:
           Default: ./rakvor-out. Example: --out E:\case-014\rv-pdfauth
 
   -l, --lang <LANG>
-          Report language: en, es, fr, or all (one HTML and PDF per language). JSON is
-          language-neutral.
+          Report language: en, es, fr, or all (one HTML and PDF per language).
           
+          JSON reports are language-neutral.
           Default: en. Example: --lang es   or   --lang all
 
   -a, --actor <NAME>
@@ -121,8 +139,7 @@ Options:
 
   -j, --jurisdiction <CC>
           Chain-of-custody form per item: co (Colombia, Fiscalía style, Spanish) or fr (France,
-          scellés, French).
-          An English copy is always added.
+          scellés, French). An English copy is always added.
           Default: co
           Example: --jurisdiction fr
 
@@ -138,8 +155,7 @@ Options:
 
       --sign-cert <P12>
           Examiner's certificate (.p12/.pfx, RSA) used to sign every PDF report. The password is
-          read from
-          the environment variable named by --sign-pass-env, or asked for interactively.
+          read from the environment variable named by --sign-pass-env, or asked for interactively.
           Default: none (PDFs are not signed)
           Example: --sign-cert C:\certs\ana-ruiz.p12
 
@@ -148,16 +164,72 @@ Options:
           Default: RV_SIGN_PASSWORD
           Example: --sign-pass-env CERT_PASS
 
+      --revisions <MODE>
+          Extract every revision of a PDF with incremental updates as <ITEM>/revisions/rev-NN.pdf
+          (byte-exact prefixes of the evidence): extract or none.
+          Default: extract
+          Example: --revisions none
+
+      --visual-diff <ON|OFF>
+          Render consecutive revisions with PDFium; write a marked-up PNG per changed page: on/off.
+          Default: on
+          Example: --visual-diff off
+
+      --dpi <N>
+          Rendering resolution for the visual comparison, 36 to 600 dots per inch.
+          Default: 110
+          Example: --dpi 150
+
+      --max-pages <N>
+          Pages compared per pair of revisions, 1 to 10000; later pages are listed as not compared.
+          Default: 50
+          Example: --max-pages 200
+
+      --objects-dump <ON|OFF>
+          Write the object tree of every revision to <ITEM>/objects.json: on or off.
+          Default: on
+          Example: --objects-dump off
+
+      --extract-embedded <ON|OFF>
+          Copy attachments and images out of each PDF into <ITEM>/embedded/: on or off.
+          Default: on
+          Example: --extract-embedded off
+
+      --worker-timeout <SECS>
+          Seconds a worker process may spend on one PDF before it is stopped (PARSER_FAILED).
+          Default: 120
+          Example: --worker-timeout 600
+
+      --worker-memory <MB>
+          Memory limit of one worker process in MiB (address space on Linux/macOS, job on Windows).
+          Default: 2048
+          Example: --worker-memory 4096
+
+      --fingerprints-db <FILE>
+          Extra producer/editor fingerprint database (JSON, as written by `fingerprints export`),
+          used with the bundled and local databases. Its name, version and SHA-256 are reported.
+          Default: none (bundled starter DB + local learned DB)
+          Example: --fingerprints-db case-014-fingerprints.json
+
+      --item-reports <WHICH>
+          Per-item report files for every item (all) or only for items with findings above info
+          (flagged). Skipped items are still listed in the statistics report; each skip is audited.
+          Default: all
+          Example: --item-reports flagged
+
   -h, --help
           Print help (see a summary with '-h')
 
 EXAMPLES:
-  Review one file (SHA-256, English reports):
-    rv-pdfauth scan --input evidence/contract.pdf
+  Review one PDF (SHA-256, English reports):
+    rv-pdfauth analyze --input evidence/contract.pdf
   Review a folder and its subfolders with SHA-256 + MD5, Spanish reports, for case CASE-2026-014:
-    rv-pdfauth scan -i D:\evidence -r --hash sha256,md5 --lang es --case CASE-2026-014
+    rv-pdfauth analyze -i D:\evidence -r --hash sha256,md5 --lang es --case CASE-2026-014
   Review the files listed in a text file, reports in the three languages, machine-readable progress:
-    rv-pdfauth scan --input-list files.txt --lang all --progress jsonl > events.jsonl
+    rv-pdfauth analyze --input-list files.txt --lang all --progress jsonl > events.jsonl
+  Large batch: no visual comparison, reports only for flagged items, a case fingerprint database:
+    rv-pdfauth analyze -i E:\mailbox-export -r --visual-diff off --item-reports flagged \
+      --fingerprints-db case-014-fingerprints.json
   Verify the audit log afterwards:
     rv-pdfauth verify-log rakvor-out/logs/<RUN-ID>/audit.jsonl
 
@@ -165,40 +237,201 @@ EXIT CODES:
   0    Completed; no high-severity finding.
   1    Runtime error (input not found, output not writable, ...). See the audit log.
   2    Usage error (unknown option, more than two hash algorithms, unsupported language).
-  3    Completed with at least one high-severity finding (e.g. unreadable file, program under
-  another name).
+  3    Completed with at least one high-severity finding (e.g. a signed revision changed afterwards,
+       a file that could not be parsed).
   130  Cancelled with Ctrl+C. Partial reports and the cancellation are written to the audit log.
 
 FILES WRITTEN:
-  <OUT>/logs/<RUN-ID>/audit.jsonl         Hash-chained log of every action (one JSON object per
-  line).
-  <OUT>/logs/<RUN-ID>/audit.log           The same actions, human-readable.
-  <OUT>/logs/<RUN-ID>/hashes.csv          Hash register: index, path, size, digests, status.
-  <OUT>/logs/<RUN-ID>/environment.json    Tool and dependency versions, OS, host, user, command
-  line.
-  <OUT>/reports/<RUN-ID>/statistics.json  Run statistics (+ statistics.<LANG>.html and .pdf).
-  <OUT>/reports/<RUN-ID>/items/<NNNNN>-<NAME>/technical.json|.<LANG>.html|.<LANG>.pdf   Technical
-  review.
-  <OUT>/reports/<RUN-ID>/items/<NNNNN>-<NAME>/summary.json|.<LANG>.html|.<LANG>.pdf     Customer
-  summary.
-  <OUT>/reports/<RUN-ID>/items/<NNNNN>-<NAME>/custody.json|.<es|fr>.html|.pdf|.en.html|.pdf  Custody
-  form.
-  <OUT>/logs/<RUN-ID>/timestamp-<SEQ>.tsr|.json  RFC 3161 token for the audit chain head.
+  <OUT>/logs/<RUN-ID>/audit.jsonl          Hash-chained log of every action (one JSON object/line).
+  <OUT>/logs/<RUN-ID>/audit.log            The same actions, human-readable.
+  <OUT>/logs/<RUN-ID>/hashes.csv           Hash register: index, path, size, digests, status.
+  <OUT>/logs/<RUN-ID>/environment.json     Tool and dependency versions, OS, host, user, arguments.
+  <OUT>/logs/<RUN-ID>/timestamp-<SEQ>.tsr  RFC 3161 token for the audit chain head (+ .json).
+  <OUT>/reports/<RUN-ID>/statistics.json   Run statistics (+ statistics.<LANG>.html and .pdf).
+  <ITEM> = <OUT>/reports/<RUN-ID>/items/<NNNNN>-<NAME>:
+  <ITEM>/technical.json|.<LANG>.html|.pdf  Technical review (revision history, signatures, fonts,
+                                           fingerprints, visual comparison, extracted files).
+  <ITEM>/summary.json|.<LANG>.html|.pdf    Customer summary with a plain-language history.
+  <ITEM>/custody.json|.<es|fr|en>.html|.pdf  Chain-of-custody form.
+  <ITEM>/revisions/rev-NN.pdf              Each revision of a PDF with incremental updates.
+  <ITEM>/visual/rev-AA-vs-BB-page-NNN.png  Changed page: both revisions, changed regions marked.
+  <ITEM>/objects.json                      Object tree of every revision.
+  <ITEM>/embedded/NN-<NAME>.jpg|.bin       Attachments and images as stored (+ .inflated.* copy).
+  Every file under <ITEM> is hashed with the selected algorithms and recorded in the audit log.
 
 FORENSIC NOTES:
   - Evidence is opened read-only and never modified; modification times are compared before and
-  after.
+    after.
   - Work on a verified copy (write-blocked image or export), not on original media.
+  - Findings are signals, not a verdict: a PDF without findings is not proven authentic, and a
+    finding does not prove forgery. Read "What it does not prove" and the Limitations section.
+  - Revisions are exact byte prefixes of the evidence (file[..end of revision N]); anyone can
+    re-derive them and their digests from the original file.
+  - Signatures: digests and signature values are checked; the signer certificate, its chain and
+    revocation are NOT validated. A flattened or re-saved PDF loses its revision history.
+  - Dates and producer strings are written by the software that saved the file and can be forged.
+  - PDF parsing and PDFium rendering run in a separate worker process with a time and memory limit.
+    PDFium (pdfium.dll / libpdfium.so / libpdfium.dylib) is shipped next to the executable; its
+    path and SHA-256 are recorded in the audit log.
   - Each audit entry stores the SHA-256 of the previous one; editing, deleting or re-ordering any
     line is detected by `verify-log`. Keep the log folder with the reports.
-  - A file without findings is not proven authentic; read the Limitations section of each report.
   - MD5 and SHA-1 are accepted for compatibility with older case files; pair them with SHA-256 or
-  BLAKE3.
+    BLAKE3.
   - The chain head is timestamped by an RFC 3161 authority (proves when the log existed). Offline?
-  The run
-    finishes with `timestamp_pending`; run `rv-pdfauth timestamp <LOG>` later.
+    The run finishes with `timestamp_pending`; run `rv-pdfauth timestamp <LOG>` later.
   - With --sign-cert every PDF is signed with the examiner's certificate; the password is never
-  logged.
+    logged.
+```
+
+## rv-pdfauth fingerprints
+
+```text
+Manage the local producer/editor fingerprint database (learn, list, export). Offline only
+
+Usage: rv-pdfauth fingerprints <COMMAND>
+
+Commands:
+  learn   Learn a producer/editor from known-original PDFs and add it to the local database
+  list    List the entries of the fingerprint databases with their version and SHA-256
+  export  Write a database to a JSON file (for --fingerprints-db elsewhere, or for disclosure)
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help
+          Print help (see a summary with '-h')
+
+DESCRIPTION:
+  Producer/editor fingerprints recognise the software that saved each revision (e.g. an online
+  editor that re-saved a scanned contract). Three databases are used by `analyze`: the bundled
+  starter DB, the local DB learned on this workstation and, optionally, --fingerprints-db FILE.
+  The local DB lives in %LOCALAPPDATA%\Rakvor\rv-pdfauth\fingerprints.local.json (Windows) or
+  $XDG_DATA_HOME/rakvor/rv-pdfauth/ (default ~/.local/share/rakvor/rv-pdfauth/) on Linux/macOS.
+  Nothing is ever sent anywhere: learning only reads the files you name.
+
+EXAMPLES:
+  rv-pdfauth fingerprints learn originals/*.pdf --label "Smallpdf" --category online_editor
+  rv-pdfauth fingerprints list --db local
+  rv-pdfauth fingerprints export --out lab-fingerprints-2026-10.json
+```
+
+### rv-pdfauth fingerprints learn
+
+```text
+Learn a producer/editor from known-original PDFs and add it to the local database
+
+Usage: rv-pdfauth fingerprints learn [OPTIONS] --label <TEXT> --category <CAT> <PDF>...
+
+Arguments:
+  <PDF>...
+          Known-original PDF files made with the tool to learn (read-only; never modified).
+          Default: none (at least one is required)
+          Example: originals/smallpdf-1.pdf originals/smallpdf-2.pdf
+
+Options:
+      --label <TEXT>
+          Name of the tool as it should appear in reports.
+          Default: none (required)
+          Example: --label "Smallpdf (online)"
+
+      --category <CAT>
+          Category: office, pdf_library, scanner, pdf_editor, online_editor, unlocker,
+          printer_driver or browser.
+          Default: none (required)
+          Example: --category online_editor
+
+  -c, --case <ID>
+          Case the originals come from, written in the entry's source and the audit log.
+          Default: none
+          Example: --case CASE-2026-014
+
+  -a, --actor <NAME>
+          Examiner written in the audit log.
+          Default: the operating-system user name
+          Example: --actor "Ana Ruiz"
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+DESCRIPTION:
+  Reads each PDF read-only, takes the Producer / Creator / XMP CreatorTool strings of the first
+  revision that has them and the structural traits the parser observes for that revision (xref
+  kind, object streams, header comments), and adds one entry `local-<label>` to the local database.
+  Several files: strings are combined and only the traits all files share are kept. Learning the
+  same label again merges into the existing entry. Nothing is written if any file fails.
+
+FILES WRITTEN:
+  <LOCAL-DB-FOLDER>/fingerprints.local.json    The local database (version incremented).
+  <LOCAL-DB-FOLDER>/fingerprints.audit.jsonl   Hash-chained log of every change: files and their
+                                               SHA-256, DB SHA-256 before and after, examiner, case.
+
+FORENSIC NOTES:
+  - Learn only from files whose origin you can prove (made by you with the tool, or vendor samples).
+  - Producer strings can be forged; a match is a signal about the software, not about a person.
+  - The DB SHA-256 printed here appears in every report that used the database.
+
+EXAMPLES:
+  rv-pdfauth fingerprints learn made-with-ilovepdf.pdf --label "iLovePDF" --category online_editor
+  rv-pdfauth fingerprints learn a.pdf b.pdf --label "Scanner X" --category scanner --case LAB-01
+
+EXIT CODES:
+  0  Learned (or merged); DB SHA-256 before/after printed.
+  1  A file is unreadable, not a PDF or has no producer string; or the DB cannot be written.
+  2  Usage error (unknown category, missing --label).
+```
+
+### rv-pdfauth fingerprints list
+
+```text
+List the entries of the fingerprint databases with their version and SHA-256
+
+Usage: rv-pdfauth fingerprints list [OPTIONS]
+
+Options:
+      --db <DB>
+          Which database: local (learned on this workstation), starter (bundled) or all.
+          Default: all
+          Example: --db local
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+EXAMPLES:
+  rv-pdfauth fingerprints list
+  rv-pdfauth fingerprints list --db local
+
+EXIT CODES:
+  0  Listed.
+  1  The local database cannot be read.
+```
+
+### rv-pdfauth fingerprints export
+
+```text
+Write a database to a JSON file (for --fingerprints-db elsewhere, or for disclosure)
+
+Usage: rv-pdfauth fingerprints export [OPTIONS] --out <FILE>
+
+Options:
+      --out <FILE>
+          File to create. An existing file is never overwritten.
+          Default: none (required)
+          Example: --out lab-fingerprints-2026-10.json
+
+      --db <DB>
+          Which database: local or starter.
+          Default: local
+          Example: --db starter
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+EXAMPLES:
+  rv-pdfauth fingerprints export --out lab-fingerprints-2026-10.json
+  rv-pdfauth fingerprints export --db starter --out starter.json
+
+EXIT CODES:
+  0  Written; its SHA-256 is printed.
+  1  The output already exists (never overwritten) or the local database does not exist.
 ```
 
 ## rv-pdfauth verify-log

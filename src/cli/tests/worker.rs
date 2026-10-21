@@ -57,7 +57,7 @@ fn scan(fault: Option<&str>, extra_env: &[(&str, &str)]) -> Run {
         c.env(k, v);
     }
     let o = c
-        .args(["scan", "-i"])
+        .args(["analyze", "-i"])
         .arg(ev.path())
         .arg("--out")
         .arg(out.path())

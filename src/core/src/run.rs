@@ -478,6 +478,7 @@ pub fn run(
         jurisdiction: cfg.jurisdiction.clone(),
         signer,
         timestamp: json!({"status": "off"}),
+        item_reports_flagged_only: cfg.domain.item_reports_flagged_only,
     };
     let log_dir_s = log_dir.display().to_string();
     for r in &results {
@@ -487,6 +488,15 @@ pub fn run(
             log_dir: log_dir_s.clone(),
         };
         let dir = report_dir.join("items").join(r.folder());
+        if info.skips_item_reports(r) {
+            log.record(
+                "item_reports_skipped",
+                Some(&r.path.display().to_string()),
+                json!({"folder": format!("items/{}", r.folder()), "status": r.status(), "reason": "item_reports_flagged_only"}),
+            )
+            .map_err(io)?;
+            continue;
+        }
         let files = report::write_item_reports(&dir, &info, r, &audit)?;
         log.record(
             "item_reports_written",

@@ -233,6 +233,9 @@
           },
           "report_folder": {
             "type": "string"
+          },
+          "reports_written": {
+            "type": "boolean"
           }
         }
       }
@@ -261,6 +264,45 @@
         },
         "log_dir": {
           "type": "string"
+        }
+      }
+    },
+    "pdf_overview": {
+      "type": "object",
+      "required": [
+        "pdfs",
+        "multi_revision",
+        "signed",
+        "online_editor",
+        "item_reports",
+        "item_reports_skipped"
+      ],
+      "properties": {
+        "pdfs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "multi_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "signed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "online_editor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "item_reports_skipped": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "item_reports": {
+          "enum": [
+            "all",
+            "flagged"
+          ]
         }
       }
     }

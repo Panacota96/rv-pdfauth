@@ -50,5 +50,5 @@ therefore no log — exists yet.
 
 ## Same results as the command line
 
-The GUI calls the same engine as `rv-pdfauth scan`. A GUI run with the same evidence, algorithms and language gives
+The GUI calls the same engine as `rv-pdfauth analyze`. A GUI run with the same evidence, algorithms and language gives
 identical hashes and findings; `environment.json` records `"frontend": "gui"` and the settings used.

@@ -1,6 +1,8 @@
 //! rv-pdfauth command-line interface. All work happens in `rv_pdfauth_core`; this file only
 //! parses arguments, renders events (progress bar or JSON Lines) and maps results to exit codes.
 
+mod fingerprints;
+
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use rv_pdfauth_core::trust::{self, DEFAULT_TSA};
@@ -19,27 +21,36 @@ const EXIT_USAGE: u8 = 2;
 const EXIT_FINDINGS: u8 = 3;
 const EXIT_CANCELLED: u8 = 130;
 
-const ABOUT: &str = "Inventory digital evidence: hash every file with one or two algorithms, detect its real type, flag anomalies and write court-ready reports with a tamper-evident audit log.";
+const ABOUT: &str = "Look for signs that PDF files were edited: revisions, dates, producers, signatures and visual changes, with court-ready reports and a tamper-evident audit log.";
 
 const LONG_ABOUT: &str = "\
 DESCRIPTION:
-  rv-pdfauth reviews a single file, a whole folder (bulk) or a list of files. For every file it:
+  rv-pdfauth looks for signs that a PDF was changed after it was first saved. It reviews a single
+  file, a whole folder (bulk) or a list of files. For every file it:
     1. opens the file read-only and hashes it in one pass with one or two algorithms;
-    2. detects the real file type from its signature (magic bytes);
-    3. flags empty files, extensions that do not match the content, programs hidden under
-       another name and duplicated content;
-    4. writes a technical report and a customer-friendly summary (HTML, PDF and JSON).
-  Each run also writes a statistics report and an audit trail under <OUT>/logs/<RUN-ID>/.
-  Every action is appended to a hash-chained log that `rv-pdfauth verify-log` can check later.";
+    2. parses the PDF without changing it: revisions (incremental saves), Info and XMP dates,
+       producer/editor fingerprints, fonts, embedded files, signatures and DocMDP permissions;
+    3. extracts each earlier revision as a byte-exact prefix of the evidence (revisions/rev-NN.pdf);
+    4. renders consecutive revisions with PDFium in an isolated worker process and writes a
+       highlighted image for every page that changed (visual/*.png);
+    5. turns what it saw into findings (signals with a severity, what they show and what they do
+       not prove) and writes a technical review and a customer summary (HTML, PDF and JSON).
+  Each run also writes a statistics report and an audit trail under <OUT>/logs/<RUN-ID>/. Every
+  action is appended to a hash-chained log that `rv-pdfauth verify-log` can check later.
+  The result is a set of signals for an examiner, never a verdict that a document is authentic or
+  forged.";
 
-const SCAN_AFTER_HELP: &str = "\
+const ANALYZE_AFTER_HELP: &str = "\
 EXAMPLES:
-  Review one file (SHA-256, English reports):
-    rv-pdfauth scan --input evidence/contract.pdf
+  Review one PDF (SHA-256, English reports):
+    rv-pdfauth analyze --input evidence/contract.pdf
   Review a folder and its subfolders with SHA-256 + MD5, Spanish reports, for case CASE-2026-014:
-    rv-pdfauth scan -i D:\\evidence -r --hash sha256,md5 --lang es --case CASE-2026-014
+    rv-pdfauth analyze -i D:\\evidence -r --hash sha256,md5 --lang es --case CASE-2026-014
   Review the files listed in a text file, reports in the three languages, machine-readable progress:
-    rv-pdfauth scan --input-list files.txt --lang all --progress jsonl > events.jsonl
+    rv-pdfauth analyze --input-list files.txt --lang all --progress jsonl > events.jsonl
+  Large batch: no visual comparison, reports only for flagged items, a case fingerprint database:
+    rv-pdfauth analyze -i E:\\mailbox-export -r --visual-diff off --item-reports flagged \\
+      --fingerprints-db case-014-fingerprints.json
   Verify the audit log afterwards:
     rv-pdfauth verify-log rakvor-out/logs/<RUN-ID>/audit.jsonl
 
@@ -47,30 +58,91 @@ EXIT CODES:
   0    Completed; no high-severity finding.
   1    Runtime error (input not found, output not writable, ...). See the audit log.
   2    Usage error (unknown option, more than two hash algorithms, unsupported language).
-  3    Completed with at least one high-severity finding (e.g. unreadable file, program under another name).
+  3    Completed with at least one high-severity finding (e.g. a signed revision changed afterwards,
+       a file that could not be parsed).
   130  Cancelled with Ctrl+C. Partial reports and the cancellation are written to the audit log.
 
 FILES WRITTEN:
-  <OUT>/logs/<RUN-ID>/audit.jsonl         Hash-chained log of every action (one JSON object per line).
-  <OUT>/logs/<RUN-ID>/audit.log           The same actions, human-readable.
-  <OUT>/logs/<RUN-ID>/hashes.csv          Hash register: index, path, size, digests, status.
-  <OUT>/logs/<RUN-ID>/environment.json    Tool and dependency versions, OS, host, user, command line.
-  <OUT>/reports/<RUN-ID>/statistics.json  Run statistics (+ statistics.<LANG>.html and .pdf).
-  <OUT>/reports/<RUN-ID>/items/<NNNNN>-<NAME>/technical.json|.<LANG>.html|.<LANG>.pdf   Technical review.
-  <OUT>/reports/<RUN-ID>/items/<NNNNN>-<NAME>/summary.json|.<LANG>.html|.<LANG>.pdf     Customer summary.
-  <OUT>/reports/<RUN-ID>/items/<NNNNN>-<NAME>/custody.json|.<es|fr>.html|.pdf|.en.html|.pdf  Custody form.
-  <OUT>/logs/<RUN-ID>/timestamp-<SEQ>.tsr|.json  RFC 3161 token for the audit chain head.
+  <OUT>/logs/<RUN-ID>/audit.jsonl          Hash-chained log of every action (one JSON object/line).
+  <OUT>/logs/<RUN-ID>/audit.log            The same actions, human-readable.
+  <OUT>/logs/<RUN-ID>/hashes.csv           Hash register: index, path, size, digests, status.
+  <OUT>/logs/<RUN-ID>/environment.json     Tool and dependency versions, OS, host, user, arguments.
+  <OUT>/logs/<RUN-ID>/timestamp-<SEQ>.tsr  RFC 3161 token for the audit chain head (+ .json).
+  <OUT>/reports/<RUN-ID>/statistics.json   Run statistics (+ statistics.<LANG>.html and .pdf).
+  <ITEM> = <OUT>/reports/<RUN-ID>/items/<NNNNN>-<NAME>:
+  <ITEM>/technical.json|.<LANG>.html|.pdf  Technical review (revision history, signatures, fonts,
+                                           fingerprints, visual comparison, extracted files).
+  <ITEM>/summary.json|.<LANG>.html|.pdf    Customer summary with a plain-language history.
+  <ITEM>/custody.json|.<es|fr|en>.html|.pdf  Chain-of-custody form.
+  <ITEM>/revisions/rev-NN.pdf              Each revision of a PDF with incremental updates.
+  <ITEM>/visual/rev-AA-vs-BB-page-NNN.png  Changed page: both revisions, changed regions marked.
+  <ITEM>/objects.json                      Object tree of every revision.
+  <ITEM>/embedded/NN-<NAME>.jpg|.bin       Attachments and images as stored (+ .inflated.* copy).
+  Every file under <ITEM> is hashed with the selected algorithms and recorded in the audit log.
 
 FORENSIC NOTES:
-  - Evidence is opened read-only and never modified; modification times are compared before and after.
+  - Evidence is opened read-only and never modified; modification times are compared before and
+    after.
   - Work on a verified copy (write-blocked image or export), not on original media.
+  - Findings are signals, not a verdict: a PDF without findings is not proven authentic, and a
+    finding does not prove forgery. Read \"What it does not prove\" and the Limitations section.
+  - Revisions are exact byte prefixes of the evidence (file[..end of revision N]); anyone can
+    re-derive them and their digests from the original file.
+  - Signatures: digests and signature values are checked; the signer certificate, its chain and
+    revocation are NOT validated. A flattened or re-saved PDF loses its revision history.
+  - Dates and producer strings are written by the software that saved the file and can be forged.
+  - PDF parsing and PDFium rendering run in a separate worker process with a time and memory limit.
+    PDFium (pdfium.dll / libpdfium.so / libpdfium.dylib) is shipped next to the executable; its
+    path and SHA-256 are recorded in the audit log.
   - Each audit entry stores the SHA-256 of the previous one; editing, deleting or re-ordering any
     line is detected by `verify-log`. Keep the log folder with the reports.
-  - A file without findings is not proven authentic; read the Limitations section of each report.
-  - MD5 and SHA-1 are accepted for compatibility with older case files; pair them with SHA-256 or BLAKE3.
-  - The chain head is timestamped by an RFC 3161 authority (proves when the log existed). Offline? The run
-    finishes with `timestamp_pending`; run `rv-pdfauth timestamp <LOG>` later.
-  - With --sign-cert every PDF is signed with the examiner's certificate; the password is never logged.";
+  - MD5 and SHA-1 are accepted for compatibility with older case files; pair them with SHA-256 or
+    BLAKE3.
+  - The chain head is timestamped by an RFC 3161 authority (proves when the log existed). Offline?
+    The run finishes with `timestamp_pending`; run `rv-pdfauth timestamp <LOG>` later.
+  - With --sign-cert every PDF is signed with the examiner's certificate; the password is never
+    logged.";
+
+const FINGERPRINTS_AFTER_HELP: &str = "\
+DESCRIPTION:
+  Producer/editor fingerprints recognise the software that saved each revision (e.g. an online
+  editor that re-saved a scanned contract). Three databases are used by `analyze`: the bundled
+  starter DB, the local DB learned on this workstation and, optionally, --fingerprints-db FILE.
+  The local DB lives in %LOCALAPPDATA%\\Rakvor\\rv-pdfauth\\fingerprints.local.json (Windows) or
+  $XDG_DATA_HOME/rakvor/rv-pdfauth/ (default ~/.local/share/rakvor/rv-pdfauth/) on Linux/macOS.
+  Nothing is ever sent anywhere: learning only reads the files you name.
+
+EXAMPLES:
+  rv-pdfauth fingerprints learn originals/*.pdf --label \"Smallpdf\" --category online_editor
+  rv-pdfauth fingerprints list --db local
+  rv-pdfauth fingerprints export --out lab-fingerprints-2026-10.json";
+
+const FP_LEARN_AFTER_HELP: &str = "\
+DESCRIPTION:
+  Reads each PDF read-only, takes the Producer / Creator / XMP CreatorTool strings of the first
+  revision that has them and the structural traits the parser observes for that revision (xref
+  kind, object streams, header comments), and adds one entry `local-<label>` to the local database.
+  Several files: strings are combined and only the traits all files share are kept. Learning the
+  same label again merges into the existing entry. Nothing is written if any file fails.
+
+FILES WRITTEN:
+  <LOCAL-DB-FOLDER>/fingerprints.local.json    The local database (version incremented).
+  <LOCAL-DB-FOLDER>/fingerprints.audit.jsonl   Hash-chained log of every change: files and their
+                                               SHA-256, DB SHA-256 before and after, examiner, case.
+
+FORENSIC NOTES:
+  - Learn only from files whose origin you can prove (made by you with the tool, or vendor samples).
+  - Producer strings can be forged; a match is a signal about the software, not about a person.
+  - The DB SHA-256 printed here appears in every report that used the database.
+
+EXAMPLES:
+  rv-pdfauth fingerprints learn made-with-ilovepdf.pdf --label \"iLovePDF\" --category online_editor
+  rv-pdfauth fingerprints learn a.pdf b.pdf --label \"Scanner X\" --category scanner --case LAB-01
+
+EXIT CODES:
+  0  Learned (or merged); DB SHA-256 before/after printed.
+  1  A file is unreadable, not a PDF or has no producer string; or the DB cannot be written.
+  2  Usage error (unknown category, missing --label).";
 
 #[derive(Parser)]
 #[command(name = TOOL_NAME, version = TOOL_VERSION, about = ABOUT, long_about = LONG_ABOUT, max_term_width = 100,
@@ -82,9 +154,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Hash, check and report on a file, a folder or a list of files.
-    #[command(long_about = LONG_ABOUT, after_long_help = SCAN_AFTER_HELP)]
-    Scan(ScanArgs),
+    /// Look for signs of editing in PDF files (a file, a folder or a list) and write the reports.
+    ///
+    /// `scan` is accepted as a hidden alias for one release so existing scripts keep working.
+    #[command(long_about = LONG_ABOUT, after_long_help = ANALYZE_AFTER_HELP, alias = "scan")]
+    Analyze(AnalyzeArgs),
+    /// Manage the local producer/editor fingerprint database (learn, list, export). Offline only.
+    #[command(subcommand, after_long_help = FINGERPRINTS_AFTER_HELP)]
+    Fingerprints(FingerprintsCmd),
     /// Verify that an audit log (audit.jsonl) has not been edited, truncated or re-ordered.
     #[command(after_long_help = "\
 EXAMPLES:
@@ -152,10 +229,11 @@ enum ProgressMode {
 }
 
 #[derive(Args)]
-struct ScanArgs {
+struct AnalyzeArgs {
     /// File or folder to review. Repeat for several.
     ///
-    /// Folders are reviewed one level deep unless --recursive is given. Symbolic links are not followed.
+    /// Folders are reviewed one level deep unless --recursive is given. Symbolic links are not
+    /// followed.
     /// Default: none (required unless --input-list is given).
     /// Example: --input D:\evidence --input E:\phone-export\chat.txt
     #[arg(
@@ -208,8 +286,9 @@ struct ScanArgs {
     )]
     out: PathBuf,
 
-    /// Report language: en, es, fr, or all (one HTML and PDF per language). JSON is language-neutral.
+    /// Report language: en, es, fr, or all (one HTML and PDF per language).
     ///
+    /// JSON reports are language-neutral.
     /// Default: en. Example: --lang es   or   --lang all
     #[arg(
         short,
@@ -248,8 +327,8 @@ struct ScanArgs {
     )]
     progress: ProgressMode,
 
-    /// Chain-of-custody form per item: co (Colombia, Fiscalía style, Spanish) or fr (France, scellés, French).
-    /// An English copy is always added.
+    /// Chain-of-custody form per item: co (Colombia, Fiscalía style, Spanish) or fr (France,
+    /// scellés, French). An English copy is always added.
     /// Default: co
     /// Example: --jurisdiction fr
     #[arg(short, long, value_name = "CC", default_value = "co", value_parser = ["co", "fr"], verbatim_doc_comment, hide_default_value = true, hide_possible_values = true)]
@@ -267,8 +346,8 @@ struct ScanArgs {
     #[arg(long, env = "RV_NO_TIMESTAMP", value_parser = clap::builder::FalseyValueParser::new(), verbatim_doc_comment, hide_env = true)]
     no_timestamp: bool,
 
-    /// Examiner's certificate (.p12/.pfx, RSA) used to sign every PDF report. The password is read from
-    /// the environment variable named by --sign-pass-env, or asked for interactively.
+    /// Examiner's certificate (.p12/.pfx, RSA) used to sign every PDF report. The password is
+    /// read from the environment variable named by --sign-pass-env, or asked for interactively.
     /// Default: none (PDFs are not signed)
     /// Example: --sign-cert C:\certs\ana-ruiz.p12
     #[arg(long, value_name = "P12", verbatim_doc_comment)]
@@ -285,6 +364,227 @@ struct ScanArgs {
         hide_default_value = true
     )]
     sign_pass_env: String,
+
+    /// Extract every revision of a PDF with incremental updates as <ITEM>/revisions/rev-NN.pdf
+    /// (byte-exact prefixes of the evidence): extract or none.
+    /// Default: extract
+    /// Example: --revisions none
+    #[arg(
+        long,
+        value_enum,
+        value_name = "MODE",
+        default_value = "extract",
+        verbatim_doc_comment,
+        hide_default_value = true,
+        hide_possible_values = true
+    )]
+    revisions: RevisionsMode,
+
+    /// Render consecutive revisions with PDFium; write a marked-up PNG per changed page: on/off.
+    /// Default: on
+    /// Example: --visual-diff off
+    #[arg(
+        long,
+        value_enum,
+        value_name = "ON|OFF",
+        default_value = "on",
+        verbatim_doc_comment,
+        hide_default_value = true,
+        hide_possible_values = true
+    )]
+    visual_diff: OnOff,
+
+    /// Rendering resolution for the visual comparison, 36 to 600 dots per inch.
+    /// Default: 110
+    /// Example: --dpi 150
+    #[arg(long, value_name = "N", default_value_t = 110, value_parser = clap::value_parser!(u32).range(36..=600), verbatim_doc_comment, hide_default_value = true)]
+    dpi: u32,
+
+    /// Pages compared per pair of revisions, 1 to 10000; later pages are listed as not compared.
+    /// Default: 50
+    /// Example: --max-pages 200
+    #[arg(long, value_name = "N", default_value_t = 50, value_parser = clap::value_parser!(u32).range(1..=10000), verbatim_doc_comment, hide_default_value = true)]
+    max_pages: u32,
+
+    /// Write the object tree of every revision to <ITEM>/objects.json: on or off.
+    /// Default: on
+    /// Example: --objects-dump off
+    #[arg(
+        long,
+        value_enum,
+        value_name = "ON|OFF",
+        default_value = "on",
+        verbatim_doc_comment,
+        hide_default_value = true,
+        hide_possible_values = true
+    )]
+    objects_dump: OnOff,
+
+    /// Copy attachments and images out of each PDF into <ITEM>/embedded/: on or off.
+    /// Default: on
+    /// Example: --extract-embedded off
+    #[arg(
+        long,
+        value_enum,
+        value_name = "ON|OFF",
+        default_value = "on",
+        verbatim_doc_comment,
+        hide_default_value = true,
+        hide_possible_values = true
+    )]
+    extract_embedded: OnOff,
+
+    /// Seconds a worker process may spend on one PDF before it is stopped (PARSER_FAILED).
+    /// Default: 120
+    /// Example: --worker-timeout 600
+    #[arg(long, value_name = "SECS", default_value_t = 120, value_parser = clap::value_parser!(u64).range(1..=86400), verbatim_doc_comment, hide_default_value = true)]
+    worker_timeout: u64,
+
+    /// Memory limit of one worker process in MiB (address space on Linux/macOS, job on Windows).
+    /// Default: 2048
+    /// Example: --worker-memory 4096
+    #[arg(long, value_name = "MB", default_value_t = 2048, value_parser = clap::value_parser!(u64).range(128..=1048576), verbatim_doc_comment, hide_default_value = true)]
+    worker_memory: u64,
+
+    /// Extra producer/editor fingerprint database (JSON, as written by `fingerprints export`),
+    /// used with the bundled and local databases. Its name, version and SHA-256 are reported.
+    /// Default: none (bundled starter DB + local learned DB)
+    /// Example: --fingerprints-db case-014-fingerprints.json
+    #[arg(long, value_name = "FILE", verbatim_doc_comment)]
+    fingerprints_db: Option<PathBuf>,
+
+    /// Per-item report files for every item (all) or only for items with findings above info
+    /// (flagged). Skipped items are still listed in the statistics report; each skip is audited.
+    /// Default: all
+    /// Example: --item-reports flagged
+    #[arg(
+        long,
+        value_enum,
+        value_name = "WHICH",
+        default_value = "all",
+        verbatim_doc_comment,
+        hide_default_value = true,
+        hide_possible_values = true
+    )]
+    item_reports: ItemReports,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum OnOff {
+    On,
+    Off,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum RevisionsMode {
+    Extract,
+    None,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum ItemReports {
+    All,
+    Flagged,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum DbChoice {
+    Local,
+    Starter,
+    All,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum ExportChoice {
+    Local,
+    Starter,
+}
+
+#[derive(Subcommand)]
+enum FingerprintsCmd {
+    /// Learn a producer/editor from known-original PDFs and add it to the local database.
+    #[command(after_long_help = FP_LEARN_AFTER_HELP)]
+    Learn {
+        /// Known-original PDF files made with the tool to learn (read-only; never modified).
+        /// Default: none (at least one is required)
+        /// Example: originals/smallpdf-1.pdf originals/smallpdf-2.pdf
+        #[arg(value_name = "PDF", required = true, verbatim_doc_comment)]
+        files: Vec<PathBuf>,
+        /// Name of the tool as it should appear in reports.
+        /// Default: none (required)
+        /// Example: --label "Smallpdf (online)"
+        #[arg(long, value_name = "TEXT", verbatim_doc_comment)]
+        label: String,
+        /// Category: office, pdf_library, scanner, pdf_editor, online_editor, unlocker,
+        /// printer_driver or browser.
+        /// Default: none (required)
+        /// Example: --category online_editor
+        #[arg(long, value_name = "CAT", value_parser = fingerprints::CATEGORIES, verbatim_doc_comment, hide_possible_values = true)]
+        category: String,
+        /// Case the originals come from, written in the entry's source and the audit log.
+        /// Default: none
+        /// Example: --case CASE-2026-014
+        #[arg(short, long = "case", value_name = "ID", verbatim_doc_comment)]
+        case_id: Option<String>,
+        /// Examiner written in the audit log.
+        /// Default: the operating-system user name
+        /// Example: --actor "Ana Ruiz"
+        #[arg(short, long, value_name = "NAME", verbatim_doc_comment)]
+        actor: Option<String>,
+    },
+    /// List the entries of the fingerprint databases with their version and SHA-256.
+    #[command(after_long_help = "\
+EXAMPLES:
+  rv-pdfauth fingerprints list
+  rv-pdfauth fingerprints list --db local
+
+EXIT CODES:
+  0  Listed.
+  1  The local database cannot be read.")]
+    List {
+        /// Which database: local (learned on this workstation), starter (bundled) or all.
+        /// Default: all
+        /// Example: --db local
+        #[arg(
+            long,
+            value_enum,
+            value_name = "DB",
+            default_value = "all",
+            verbatim_doc_comment,
+            hide_default_value = true,
+            hide_possible_values = true
+        )]
+        db: DbChoice,
+    },
+    /// Write a database to a JSON file (for --fingerprints-db elsewhere, or for disclosure).
+    #[command(after_long_help = "\
+EXAMPLES:
+  rv-pdfauth fingerprints export --out lab-fingerprints-2026-10.json
+  rv-pdfauth fingerprints export --db starter --out starter.json
+
+EXIT CODES:
+  0  Written; its SHA-256 is printed.
+  1  The output already exists (never overwritten) or the local database does not exist.")]
+    Export {
+        /// File to create. An existing file is never overwritten.
+        /// Default: none (required)
+        /// Example: --out lab-fingerprints-2026-10.json
+        #[arg(long, value_name = "FILE", verbatim_doc_comment)]
+        out: PathBuf,
+        /// Which database: local or starter.
+        /// Default: local
+        /// Example: --db starter
+        #[arg(
+            long,
+            value_enum,
+            value_name = "DB",
+            default_value = "local",
+            verbatim_doc_comment,
+            hide_default_value = true,
+            hide_possible_values = true
+        )]
+        db: ExportChoice,
+    },
 }
 
 fn main() -> ExitCode {
@@ -294,7 +594,8 @@ fn main() -> ExitCode {
     }
     let cli = Cli::parse();
     ExitCode::from(match cli.command {
-        Command::Scan(a) => scan(a),
+        Command::Analyze(a) => analyze(a),
+        Command::Fingerprints(f) => fingerprints_cmd(f),
         Command::VerifyLog { log } => verify_log(log),
         Command::SelfTest => self_test(),
         Command::Timestamp {
@@ -311,13 +612,53 @@ fn main() -> ExitCode {
 
 fn usage_error(msg: &str) -> u8 {
     eprintln!(
-        "error: {}\n\nFor more information, try 'rv-pdfauth scan --help'.",
+        "error: {}\n\nFor more information, try 'rv-pdfauth analyze --help'.",
         msg
     );
     EXIT_USAGE
 }
 
-fn scan(a: ScanArgs) -> u8 {
+fn fingerprints_cmd(f: FingerprintsCmd) -> u8 {
+    let r = match f {
+        FingerprintsCmd::Learn {
+            files,
+            label,
+            category,
+            case_id,
+            actor,
+        } => fingerprints::learn(&fingerprints::LearnRequest {
+            files: &files,
+            label: &label,
+            category: &category,
+            case_id: case_id.as_deref(),
+            actor: &actor.unwrap_or_else(rv_pdfauth_core::env::os_user),
+        }),
+        FingerprintsCmd::List { db } => fingerprints::list(match db {
+            DbChoice::Local => "local",
+            DbChoice::Starter => "starter",
+            DbChoice::All => "all",
+        }),
+        FingerprintsCmd::Export { out, db } => fingerprints::export(
+            match db {
+                ExportChoice::Local => "local",
+                ExportChoice::Starter => "starter",
+            },
+            &out,
+        ),
+    };
+    match r {
+        Ok(text) => {
+            let _ = writeln!(std::io::stdout(), "{}", text.trim_end());
+            EXIT_OK
+        }
+        Err(e) => {
+            eprintln!("error: {}", e);
+            EXIT_ERROR
+        }
+    }
+}
+
+fn analyze(a: AnalyzeArgs) -> u8 {
     let mut algos = Vec::new();
     for h in &a.hashes {
         match HashAlgo::parse(h) {
@@ -337,6 +678,13 @@ fn scan(a: ScanArgs) -> u8 {
         Ok(l) => l,
         Err(e) => return usage_error(&e),
     };
+
+    if let Some(db) = &a.fingerprints_db
+        && !db.is_file()
+    {
+        eprintln!("error: fingerprint database not found: {}", db.display());
+        return EXIT_ERROR;
+    }
 
     let cancel = Arc::new(AtomicBool::new(false));
     let c = cancel.clone();
@@ -368,10 +716,19 @@ fn scan(a: ScanArgs) -> u8 {
             .and_then(|_| password(&a.sign_pass_env)),
         sign_cert: a.sign_cert.clone(),
         domain: rv_pdfauth_core::analyzer::DomainOptions {
+            extract_revisions: a.revisions == RevisionsMode::Extract,
+            visual_diff: a.visual_diff == OnOff::On,
+            dpi: a.dpi,
+            max_pages: a.max_pages,
+            objects_dump: a.objects_dump == OnOff::On,
+            extract_embedded: a.extract_embedded == OnOff::On,
+            worker_timeout_s: a.worker_timeout,
+            worker_memory_mb: a.worker_memory,
+            fingerprints_db: a.fingerprints_db.clone(),
+            item_reports_flagged_only: a.item_reports == ItemReports::Flagged,
             isolation: std::env::current_exe()
                 .map(|exe| rv_pdfauth_core::analyzer::Isolation::Subprocess { exe })
                 .unwrap_or_default(),
-            ..Default::default()
         },
     };
 
@@ -612,7 +969,7 @@ fn docs_cli() -> String {
     let mut out = String::from(
         "# Command-line reference\n\n<!-- Generated by `rv-pdfauth docs-cli`. Do not edit by hand: CI fails if this file differs. -->\n\n",
     );
-    out.push_str("```mermaid\nflowchart LR\n  A[rv-pdfauth] --> B[scan]\n  A --> C[verify-log]\n  A --> D[self-test]\n  A --> T[timestamp]\n  T --> E\n  B --> E[(logs/RUN-ID)]\n  B --> F[(reports/RUN-ID)]\n  C --> E\n```\n\n");
+    out.push_str("```mermaid\nflowchart LR\n  A[rv-pdfauth] --> B[analyze]\n  A --> C[verify-log]\n  A --> D[self-test]\n  A --> T[timestamp]\n  A --> G[fingerprints]\n  G --> H[(local fingerprint DB)]\n  H --> B\n  T --> E\n  B --> E[(logs/RUN-ID)]\n  B --> F[(reports/RUN-ID)]\n  C --> E\n```\n\n");
     out.push_str(&format!(
         "## rv-pdfauth\n\n```text\n{}\n```\n\n",
         root.render_long_help().to_string().trim_end()
@@ -630,6 +987,24 @@ fn docs_cli() -> String {
             name,
             sub.render_long_help().to_string().trim_end()
         ));
+        let nested: Vec<String> = sub
+            .get_subcommands()
+            .filter(|c| !c.is_hide_set() && c.get_name() != "help")
+            .map(|c| c.get_name().to_string())
+            .collect();
+        for child in nested {
+            let mut c = sub
+                .find_subcommand_mut(&child)
+                .expect("subcommand")
+                .clone()
+                .bin_name(format!("rv-pdfauth {} {}", name, child));
+            out.push_str(&format!(
+                "### rv-pdfauth {} {}\n\n```text\n{}\n```\n\n",
+                name,
+                child,
+                c.render_long_help().to_string().trim_end()
+            ));
+        }
     }
     out
 }

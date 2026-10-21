@@ -64,11 +64,17 @@ cargo build --release
 rv-pdfauth self-test
 
 # Review a folder with SHA-256 + MD5, reports in Spanish, for case CASE-2026-014
-rv-pdfauth scan -i D:\evidence -r --hash sha256,md5 --lang es --case CASE-2026-014 --actor "Ana Ruiz"
+rv-pdfauth analyze -i D:\evidence -r --hash sha256,md5 --lang es --case CASE-2026-014 --actor "Ana Ruiz"
 
 # French case: custody form in French + English, every PDF signed with your certificate
 $env:RV_SIGN_PASSWORD = Read-Host -AsSecureString | ConvertFrom-SecureString -AsPlainText
-rv-pdfauth scan -i D:\evidence -r --jurisdiction fr --sign-cert C:\certs\examiner.p12 --lang fr
+rv-pdfauth analyze -i D:\evidence -r --jurisdiction fr --sign-cert C:\certs\examiner.p12 --lang fr
+
+# Large batch: no visual comparison, item reports only for flagged files
+rv-pdfauth analyze -i E:\mailbox-export -r --visual-diff off --item-reports flagged
+
+# Teach the tool an editor from files you made with it (local DB, nothing is sent anywhere)
+rv-pdfauth fingerprints learn made-with-editor.pdf --label "Editor X" --category online_editor
 
 # Later, prove the log was not altered (also checks the RFC 3161 timestamp)
 rv-pdfauth verify-log rakvor-out\logs\<RUN-ID>
@@ -95,6 +101,9 @@ flowchart TB
     IT --> T["technical.json / .LANG.html / .LANG.pdf"]
     IT --> S["summary.json / .LANG.html / .LANG.pdf"]
     IT --> K["custody.json / custody.es|fr + .en .html/.pdf"]
+    IT --> RV["revisions/rev-NN.pdf — byte-exact prefixes"]
+    IT --> VI["visual/rev-AA-vs-BB-page-NNN.png"]
+    IT --> OB["objects.json, embedded/"]
     LOGS --> L5["timestamp-N.tsr — RFC 3161 token"]
 ```
 

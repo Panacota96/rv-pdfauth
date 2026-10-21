@@ -44,6 +44,13 @@ pub enum Block {
     },
     /// Signature lines side by side: label under each line.
     SignLines(Vec<String>),
+    /// Filled table: bold header row (repeated after a page break) and wrapped cells. `widths` are
+    /// relative weights scaled to the content width.
+    Table {
+        header: Vec<String>,
+        widths: Vec<f32>,
+        rows: Vec<Vec<String>>,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -402,7 +409,7 @@ pub fn render(blocks: &[Block], meta: &Meta, sign: Option<SignFn>) -> Result<Vec
                 l.y -= 8.0;
             }
             Block::Heading(s) => {
-                l.ensure(40.0);
+                l.ensure(64.0); // keep a heading with at least its first lines
                 l.y -= 10.0;
                 l.lines(MARGIN, CONTENT_W, Font::Bold, 12.0, INK, s);
                 l.y -= 4.0;
@@ -516,6 +523,69 @@ pub fn render(blocks: &[Block], meta: &Meta, sign: Option<SignFn>) -> Result<Vec
                 for _ in 0..*rows {
                     l.ensure(*row_h);
                     draw_row(&mut l, *row_h, None);
+                }
+                l.y -= 6.0;
+            }
+            Block::Table {
+                header,
+                widths,
+                rows,
+            } => {
+                const SIZE: f32 = 7.5;
+                let lead = SIZE * 1.3;
+                let total: f32 = widths.iter().sum::<f32>().max(1.0);
+                let ws: Vec<f32> = widths.iter().map(|w| w / total * CONTENT_W).collect();
+                let cells = |row: &[String], font: Font| -> Vec<Vec<String>> {
+                    ws.iter()
+                        .enumerate()
+                        .map(|(i, w)| {
+                            let txt = row.get(i).map(String::as_str).unwrap_or("");
+                            let f = if font == Font::Regular && looks_like_hash(txt) {
+                                Font::Mono
+                            } else {
+                                font
+                            };
+                            wrap(txt, f, SIZE, w - 6.0)
+                        })
+                        .collect()
+                };
+                let draw = |l: &mut Layout, c: &[Vec<String>], font: Font, shade: bool| {
+                    let n = c.iter().map(|x| x.len()).max().unwrap_or(1).max(1);
+                    let h = n as f32 * lead + 5.0;
+                    let top = l.y;
+                    if shade {
+                        l.rect(MARGIN, top - h, CONTENT_W, h, (0.961, 0.969, 0.984));
+                    }
+                    let mut x = MARGIN;
+                    for (i, w) in ws.iter().enumerate() {
+                        for (j, line) in c[i].iter().enumerate() {
+                            let f = if font == Font::Regular && looks_like_hash(line) {
+                                Font::Mono
+                            } else {
+                                font
+                            };
+                            let col = if shade { MUTED } else { INK };
+                            l.text(x + 3.0, top - lead * (j as f32 + 1.0), f, SIZE, col, line);
+                        }
+                        x += w;
+                    }
+                    l.y = top - h;
+                    let y = l.y;
+                    l.rule(y, 0.4, LINE);
+                };
+                let head = cells(header, Font::Bold);
+                let head_h = head.iter().map(|x| x.len()).max().unwrap_or(1) as f32 * lead + 5.0;
+                l.ensure(head_h + 3.0 * lead);
+                l.y -= 2.0;
+                draw(&mut l, &head, Font::Bold, true);
+                for r in rows {
+                    let c = cells(r, Font::Regular);
+                    let h = c.iter().map(|x| x.len()).max().unwrap_or(1) as f32 * lead + 5.0;
+                    if l.y - h < BOTTOM {
+                        l.ensure(h + head_h);
+                        draw(&mut l, &head, Font::Bold, true);
+                    }
+                    draw(&mut l, &c, Font::Regular, false);
                 }
                 l.y -= 6.0;
             }

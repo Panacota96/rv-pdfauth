@@ -4,6 +4,7 @@
 //! HTML and PDF are rendered from the same view model (`*_context`), so they never disagree.
 
 pub mod pdf;
+pub mod pdfview;
 
 use crate::analyzer::{Finding, Severity};
 use crate::hash::{HashAlgo, hash_bytes};
@@ -60,6 +61,16 @@ pub struct RunInfo {
     pub signer: Option<std::sync::Arc<crate::trust::PdfSigner>>,
     /// {"status": "ok"|"pending"|"off", ...}
     pub timestamp: Value,
+    /// `--item-reports flagged`: no per-item report files for items whose status is ok (they are still
+    /// listed in the statistics report and the audit log records the skip).
+    pub item_reports_flagged_only: bool,
+}
+
+impl RunInfo {
+    /// True when this item gets no report files (`--item-reports flagged` and status ok).
+    pub fn skips_item_reports(&self, it: &ItemResult) -> bool {
+        self.item_reports_flagged_only && it.status() == "ok"
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -320,6 +331,7 @@ pub fn statistics_context(
         .map(|it| {
             json!({"index": it.index, "file_name": it.file_name(), "size": it.size, "finding_count": it.findings.len(),
                    "status": it.status(), "status_label": c.label(&format!("status_{}", it.status())),
+                   "has_reports": !run.skips_item_reports(it),
                    "link": format!("items/{}/technical.{}.html", it.folder(), lang)})
         })
         .collect();
@@ -329,6 +341,18 @@ pub fn statistics_context(
     m.insert("type_rows".into(), json!(type_rows));
     m.insert("duplicate_rows".into(), json!(duplicate_rows));
     m.insert("item_rows".into(), json!(item_rows));
+    let ov = pdfview::pdf_overview(items);
+    let skipped = items.iter().filter(|it| run.skips_item_reports(it)).count();
+    m.insert(
+        "pdf_rows".into(),
+        json!([
+            {"label": c.label("pdfs_analyzed"), "count": ov["pdfs"]},
+            {"label": c.label("pdfs_multi_revision"), "count": ov["multi_revision"]},
+            {"label": c.label("pdfs_signed"), "count": ov["signed"]},
+            {"label": c.label("pdfs_online_editor"), "count": ov["online_editor"]},
+            {"label": c.label("item_reports_skipped"), "count": skipped},
+        ]),
+    );
     m.insert(
         "audit".into(),
         json!({"head": audit.head, "entries": audit.entries, "log_dir": audit.log_dir}),
@@ -381,6 +405,8 @@ pub fn item_context(lang: &str, run: &RunInfo, it: &ItemResult, audit: &AuditRef
         "audit".into(),
         json!({"head": audit.head, "entries": audit.entries, "log_dir": audit.log_dir}),
     );
+    m.insert("pdf".into(), pdfview::pdf_view(c, it));
+    m.insert("extracted".into(), pdfview::extracted_view(it));
     Value::Object(m)
 }
 
@@ -437,6 +463,14 @@ pub fn statistics_json(
             .entry(it.detected_type.clone().unwrap_or_else(|| "unknown".into()))
             .or_default() += 1;
     }
+    let mut ov = pdfview::pdf_overview(items);
+    ov["item_reports"] = json!(if run.item_reports_flagged_only {
+        "flagged"
+    } else {
+        "all"
+    });
+    ov["item_reports_skipped"] =
+        json!(items.iter().filter(|it| run.skips_item_reports(it)).count());
     json!({
         "schema": SCHEMA_STATISTICS,
         "tool": {"name": run.tool_name, "version": run.tool_version},
@@ -445,7 +479,9 @@ pub fn statistics_json(
         "findings_by_severity": sev, "findings_by_code": codes, "items_by_status": status, "items_by_type": types,
         "duplicate_groups": duplicate_groups(items).into_iter().map(|(h, idx)| json!({"hash": h, "items": idx.iter().map(|&i| items[i].index).collect::<Vec<_>>()})).collect::<Vec<_>>(),
         "items": items.iter().map(|it| json!({"index": it.index, "path": it.path.display().to_string(), "size": it.size, "status": it.status(),
-              "findings": it.findings.iter().map(|f| f.code.clone()).collect::<Vec<_>>(), "report_folder": format!("items/{}", it.folder())})).collect::<Vec<_>>(),
+              "findings": it.findings.iter().map(|f| f.code.clone()).collect::<Vec<_>>(), "report_folder": format!("items/{}", it.folder()),
+              "reports_written": !run.skips_item_reports(it)})).collect::<Vec<_>>(),
+        "pdf_overview": ov,
         "limitations": LIMITATIONS,
         "audit": {"head": audit.head, "entries": audit.entries, "log_dir": audit.log_dir},
         "timestamp": if run.timestamp.is_object() { run.timestamp.clone() } else { json!({"status": "off"}) },
@@ -464,6 +500,8 @@ pub fn technical_json(run: &RunInfo, it: &ItemResult) -> Value {
         "findings": findings_json(it, &run.langs),
         "limitations": LIMITATIONS,
         "audit": {"first_seq": it.audit_first_seq, "last_seq": it.audit_last_seq},
+        "pdf": pdfview::pdf_json(it),
+        "extracted_files": pdfview::extracted_json(it),
     })
 }
 
@@ -484,6 +522,7 @@ pub fn summary_json(run: &RunInfo, it: &ItemResult) -> Value {
         "fingerprint": it.hashes.first().map(|(a, h)| json!({"algorithm": a.name(), "value": h})),
         "findings": findings_json(it, &run.langs),
         "text": texts,
+        "history": pdfview::history_json(it, &run.langs),
     })
 }
 
@@ -626,6 +665,13 @@ pub fn statistics_pdf(ctx: &Value, run: &RunInfo) -> Result<Vec<u8>, String> {
         }
         b.push(Block::Space(4.0));
     }
+    b.push(Block::Heading(t("pdf_overview")));
+    b.push(Block::Kv(
+        arr(ctx, "pdf_rows")
+            .iter()
+            .map(|r| (s(r, "label"), s(r, "count")))
+            .collect(),
+    ));
     b.push(Block::Heading(t("items")));
     b.push(Block::Kv(
         arr(ctx, "item_rows")
@@ -668,6 +714,183 @@ pub fn statistics_pdf(ctx: &Value, run: &RunInfo) -> Result<Vec<u8>, String> {
         (t("log_dir"), s(ctx, "audit.log_dir")),
     ]));
     finish(ctx, &t("title_statistics"), &b, run)
+}
+
+fn table(header: Vec<String>, widths: &[f32], rows: &[Value], keys: &[&str]) -> Block {
+    Block::Table {
+        header,
+        widths: widths.to_vec(),
+        rows: rows
+            .iter()
+            .map(|r| keys.iter().map(|k| s(r, k)).collect())
+            .collect(),
+    }
+}
+
+/// Revision history, timeline, signatures, fonts, fingerprints, visual comparison and extracted files.
+fn pdf_blocks(ctx: &Value) -> Vec<Block> {
+    let t = |k: &str| s(ctx, &format!("t.{}", k));
+    let mut b = Vec::new();
+    let pv = &ctx["pdf"];
+    if pv.is_object() {
+        b.push(Block::Heading(t("revision_history")));
+        b.push(table(
+            vec![
+                "#".into(),
+                t("byte_range"),
+                t("saved_at_info"),
+                t("saved_at_xmp"),
+                t("producer"),
+                t("since_previous"),
+                t("objects_acd"),
+                t("pages_changed"),
+                t("signed_by_field"),
+            ],
+            &[3.0, 12.0, 12.0, 12.0, 14.0, 9.0, 10.0, 9.0, 9.0],
+            arr(pv, "revision_rows"),
+            &[
+                "index",
+                "byte_range",
+                "saved_info",
+                "saved_xmp",
+                "producer",
+                "since",
+                "objects",
+                "pages",
+                "signed_by",
+            ],
+        ));
+        b.push(Block::Heading(t("timeline")));
+        b.push(table(
+            vec![
+                "#".into(),
+                t("saved_at"),
+                t("since_previous"),
+                t("producer"),
+            ],
+            &[4.0, 22.0, 14.0, 30.0],
+            arr(pv, "timeline"),
+            &["index", "date", "since", "producer"],
+        ));
+        b.push(Block::Para(t("timeline_note")));
+        b.push(Block::Heading(t("signatures")));
+        let sigs = arr(pv, "signature_rows");
+        if sigs.is_empty() {
+            b.push(Block::Para(t("none")));
+        } else {
+            b.push(table(
+                vec![
+                    t("sig_field"),
+                    t("sig_signer"),
+                    t("sig_time"),
+                    t("sig_revision"),
+                    t("sig_covers"),
+                    t("sig_digest"),
+                    t("sig_valid"),
+                    t("sig_docmdp"),
+                    t("sig_later"),
+                ],
+                &[10.0, 19.0, 13.0, 8.0, 8.0, 8.0, 8.0, 7.0, 9.0],
+                sigs,
+                &[
+                    "field", "signer", "time", "revision", "covers", "digest", "valid", "docmdp",
+                    "later",
+                ],
+            ));
+        }
+        b.push(Block::Para(t("sig_trust_note")));
+        b.push(Block::Heading(t("fonts")));
+        let fonts = arr(pv, "font_rows");
+        if fonts.is_empty() {
+            b.push(Block::Para(t("none")));
+        } else {
+            b.push(table(
+                vec![
+                    t("font_name"),
+                    t("font_subset"),
+                    t("font_embedded"),
+                    t("font_first_rev"),
+                    t("font_object"),
+                ],
+                &[30.0, 10.0, 8.0, 8.0, 8.0],
+                fonts,
+                &["name", "subset", "embedded", "first_revision", "object"],
+            ));
+        }
+        b.push(Block::Heading(t("producer_fingerprints")));
+        b.push(table(
+            vec![
+                t("fp_role"),
+                t("fp_db"),
+                t("fp_version"),
+                t("fp_entries"),
+                t("fp_status"),
+                "SHA-256".into(),
+            ],
+            &[7.0, 12.0, 9.0, 8.0, 7.0, 40.0],
+            arr(pv, "db_rows"),
+            &["role", "name", "version", "entries", "status", "sha256"],
+        ));
+        let matches = arr(pv, "match_rows");
+        if matches.is_empty() {
+            b.push(Block::Para(t("fp_no_match")));
+        } else {
+            b.push(table(
+                vec![
+                    "#".into(),
+                    t("fp_label"),
+                    t("fp_category"),
+                    t("fp_matched_on"),
+                    t("fp_value"),
+                    t("fp_mismatch"),
+                ],
+                &[3.0, 13.0, 10.0, 9.0, 18.0, 18.0],
+                matches,
+                &[
+                    "revision",
+                    "label",
+                    "category",
+                    "matched_on",
+                    "value",
+                    "mismatches",
+                ],
+            ));
+        }
+        b.push(Block::Heading(t("visual_comparison")));
+        let mut kv = vec![(t("status"), s(pv, "visual.status_label"))];
+        if !s(pv, "visual.reason").is_empty() {
+            kv.push((t("reason"), s(pv, "visual.reason")));
+        }
+        kv.push((t("pages_changed"), s(pv, "visual.pages_changed")));
+        b.push(Block::Kv(kv));
+        let imgs = pv["visual"]["images"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        if imgs.is_empty() {
+            b.push(Block::Para(t("visual_none")));
+        } else {
+            b.push(Block::Para(t("visual_files")));
+            for i in &imgs {
+                b.push(Block::Bullet(s(i, "href")));
+            }
+        }
+    }
+    let ex = arr(ctx, "extracted");
+    if !ex.is_empty() {
+        b.push(Block::Heading(t("extracted_files")));
+        for e in ex {
+            b.push(Block::Kv(vec![(
+                format!("{} ({}, {} B)", s(e, "href"), s(e, "kind"), s(e, "bytes")),
+                arr(e, "digests")
+                    .iter()
+                    .map(|d| d.as_str().unwrap_or_default().to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            )]));
+        }
+    }
+    b
 }
 
 pub fn technical_pdf(ctx: &Value, run: &RunInfo) -> Result<Vec<u8>, String> {
@@ -714,6 +937,7 @@ pub fn technical_pdf(ctx: &Value, run: &RunInfo) -> Result<Vec<u8>, String> {
             ],
         });
     }
+    b.extend(pdf_blocks(ctx));
     b.push(Block::Heading(t("method")));
     b.push(Block::Para(t("method_text")));
     b.push(Block::Heading(t("audit")));
@@ -745,6 +969,10 @@ pub fn summary_pdf(ctx: &Value, run: &RunInfo) -> Result<Vec<u8>, String> {
     let mut b = header(ctx, "title_summary", sub);
     b.push(Block::Status(s(ctx, "item.status_label")));
     b.push(Block::Para(s(ctx, "item.summary_text")));
+    if !s(ctx, "pdf.history_text").is_empty() {
+        b.push(Block::Heading(t("history")));
+        b.push(Block::Para(s(ctx, "pdf.history_text")));
+    }
     b.push(Block::Heading(t("what_we_did")));
     b.push(Block::Para(t("method_text")));
     b.push(Block::Heading(t("what_we_found")));
@@ -916,13 +1144,17 @@ pub fn pretty(v: &Value) -> Vec<u8> {
     s.into_bytes()
 }
 
-/// Writes the six (or more, with several languages) report files of one item. Returns {file: digests}.
+/// Writes the six (or more, with several languages) report files of one item. Returns {file: digests};
+/// an empty map, writing nothing, when [`RunInfo::skips_item_reports`] (the caller audits the skip).
 pub fn write_item_reports(
     dir: &Path,
     run: &RunInfo,
     it: &ItemResult,
     audit: &AuditRef,
 ) -> Result<serde_json::Map<String, Value>, String> {
+    if run.skips_item_reports(it) {
+        return Ok(serde_json::Map::new());
+    }
     std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {}", dir.display(), e))?;
     let algos = &run.algorithms;
     let mut files = serde_json::Map::new();

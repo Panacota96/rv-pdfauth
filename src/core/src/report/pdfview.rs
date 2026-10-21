@@ -426,6 +426,15 @@ pub fn pdf_view(c: &Catalog, it: &ItemResult) -> Value {
                    "object": or_dash(str_of(&f["object"]))})
         })
         .collect();
+    // Scale rule: an item report must not grow without bound; the full list is in objects.json.
+    const MAX_FONT_ROWS: usize = 100;
+    let mut font_rows = font_rows;
+    if font_rows.len() > MAX_FONT_ROWS {
+        let more = font_rows.len() - MAX_FONT_ROWS;
+        font_rows.truncate(MAX_FONT_ROWS);
+        font_rows.push(json!({"name": format!("\u{2026} (+{more}, objects.json)"), "subset": "\u{2014}",
+                              "embedded": "\u{2014}", "first_revision": "\u{2014}", "object": "\u{2014}"}));
+    }
     let db_rows: Vec<Value> = pj["fingerprint_dbs"]
         .as_array()
         .cloned()

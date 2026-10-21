@@ -455,7 +455,10 @@ fn object_tree_and_xref_stream_sample() {
     assert_eq!(r.revisions[0].xref_kind, "stream");
     let objs = r.object_tree["revisions"][0]["objects"].as_array().unwrap();
     assert!(objs.iter().any(|o| o["type"] == "Catalog"));
-    assert!(objs.iter().any(|o| o["in_object_stream"] == true));
+    assert!(
+        objs.iter()
+            .any(|o| o["in_object_stream"].as_u64().is_some())
+    );
 }
 
 #[test]

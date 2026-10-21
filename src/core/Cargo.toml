@@ -45,10 +45,5 @@ libc.workspace = true
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
 
-[features]
-# Use rv_pdfauth_pdf::starter_db() (bundled fingerprint DB) once the PDF layer provides it.
-# Off: an empty "starter" DB is recorded as unavailable (see src/fingerprints.rs).
-starter-db = []
-
 [dev-dependencies]
 tempfile.workspace = true

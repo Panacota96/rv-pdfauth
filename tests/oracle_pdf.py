@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Cross-checks the PDF layer against independent test oracles (never shipped):
 
-  * pikepdf / libqpdf: page count of every revision prefix, trailer /ID, the merged xref of the
-    final revision (qpdf --show-xref through pikepdf.Job) and whether qpdf had to repair the file;
+  * pikepdf / libqpdf: page count of every revision prefix, trailer /ID, whether qpdf had to repair
+    the file, and the merged xref of the final revision (`qpdf --show-xref`, when the qpdf CLI exists);
   * pyHanko: number of revisions and the startxref of each one (from the /Prev chain), and for
     every signature the digest ("intact"), the signature maths ("valid"), ByteRange coverage and
     DocMDP compliance.
@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import warnings
@@ -50,8 +51,11 @@ def ours(files: list[Path]) -> dict[str, dict]:
 
 
 def qpdf_xref(path: Path) -> dict[str, tuple[str, int]] | None:
-    code = "import pikepdf,sys; pikepdf.Job(['qpdf','--show-xref',sys.argv[1]]).run()"
-    out = subprocess.run([sys.executable, "-c", code, str(path)], capture_output=True, text=True)
+    """Merged xref of the final revision as qpdf sees it: object -> ("file", offset) or ("objstm", stream)."""
+    exe = shutil.which("qpdf")
+    if exe is None:
+        return None
+    out = subprocess.run([exe, "--show-xref", str(path)], capture_output=True, text=True)
     if out.returncode not in (0, 3):  # 3 = success with warnings
         return None
     xref = {}
@@ -60,7 +64,7 @@ def qpdf_xref(path: Path) -> dict[str, tuple[str, int]] | None:
         if m:
             xref[f"{m[1]} {m[2]}"] = ("file", int(m[3]))
             continue
-        m = re.match(r"(\d+)/(\d+): compressed; stream = (\d+), offset = (\d+)", line)
+        m = re.match(r"(\d+)/(\d+): compressed; stream = (\d+)", line)
         if m:
             xref[f"{m[1]} {m[2]}"] = ("objstm", int(m[3]))
     return xref
@@ -70,8 +74,8 @@ def our_latest_offsets(rep: dict) -> dict[str, tuple[str, int]]:
     latest: dict[str, tuple[str, int]] = {}
     for rev in rep["object_tree"].get("revisions", []):
         for o in rev["objects"]:
-            kind = "objstm" if o.get("in_object_stream") else "file"
-            latest[o["id"]] = (kind, o["offset"])
+            stm = o.get("in_object_stream")
+            latest[o["id"]] = ("objstm", stm) if stm is not None else ("file", o["offset"])
     return latest
 
 
@@ -100,8 +104,10 @@ def check_pikepdf(c: Check, path: Path, rep: dict) -> None:
         warnings.simplefilter("ignore")
         try:
             with pikepdf.open(path) as p:
-                qpdf_warn = len(p.get_warnings())
                 c.eq("pikepdf page count (final revision)", rep["page_count"], len(p.pages))
+                for _ in p.objects:  # qpdf parses lazily: resolve everything before reading its warnings
+                    pass
+                qpdf_warn = len(p.get_warnings())
         except Exception as e:  # noqa: BLE001
             c.note(f"pikepdf cannot open the file ({type(e).__name__}: {e})")
             c.eq("structure damaged (ours) vs pikepdf failure", damaged(rep), True)
@@ -118,7 +124,7 @@ def check_pikepdf(c: Check, path: Path, rep: dict) -> None:
             c.eq(f"rev {r['index']} trailer /ID", r["id"], ids)
     xref = qpdf_xref(path)
     if xref is None:
-        c.note("qpdf --show-xref failed")
+        c.note("qpdf CLI not found or --show-xref failed: xref comparison skipped")
         return
     mine = our_latest_offsets(rep)
     diff = {k: (mine.get(k), v) for k, v in xref.items() if mine.get(k) != v}

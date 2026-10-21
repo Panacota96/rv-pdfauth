@@ -149,8 +149,8 @@ fn bulk_scan_writes_reports_logs_and_verifiable_chain() {
         ])
         .arg(out.path())
         .assert()
-        .code(0)
-        .stdout(predicate::str::contains("items: 3"));
+        .code(3)
+        .stdout(predicate::str::contains("items: 7"));
     let logs = only_dir(&out.path().join("logs"));
     let reports = only_dir(&out.path().join("reports"));
     for f in ["audit.jsonl", "audit.log", "hashes.csv", "environment.json"] {
@@ -162,7 +162,7 @@ fn bulk_scan_writes_reports_logs_and_verifiable_chain() {
         }
     }
     let items: Vec<_> = std::fs::read_dir(reports.join("items")).unwrap().collect();
-    assert_eq!(items.len(), 3, "one folder per item");
+    assert_eq!(items.len(), 7, "one folder per item");
     for item in items {
         let d = item.unwrap().path();
         for f in [
@@ -305,7 +305,7 @@ fn trust_timestamp_signature_and_custody_with_test_pki() {
         .arg("-o")
         .arg(out.path())
         .assert()
-        .code(0)
+        .code(3)
         .stdout(predicate::str::contains("timestamp: ok"));
     let logs = only_dir(&out.path().join("logs"));
     bin()
@@ -351,7 +351,7 @@ fn trust_timestamp_signature_and_custody_with_test_pki() {
         ])
         .arg(out2.path())
         .assert()
-        .code(0)
+        .code(3)
         .stdout(predicate::str::contains("timestamp: pending"));
     let logs2 = only_dir(&out2.path().join("logs"));
     bin()

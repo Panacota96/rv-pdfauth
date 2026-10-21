@@ -999,8 +999,17 @@ pub fn build(bytes: &[u8], opts: &PdfOptions) -> PdfReport {
     }
 
     // ---------------------------------------------------------- fingerprints
+    // The bundled starter DB is always used; the core may pass it again (with the local and extra
+    // DBs), so databases with the same name and version are used once.
     let mut dbs = vec![fingerprint::starter_db()];
-    dbs.extend(opts.fingerprints.iter().cloned());
+    for db in &opts.fingerprints {
+        if !dbs
+            .iter()
+            .any(|d| d.name == db.name && d.version == db.version)
+        {
+            dbs.push(db.clone());
+        }
+    }
     let traits: Vec<RevTraits> = (1..=n)
         .map(|k| {
             let ri = &doc.revs[k - 1];
@@ -1494,7 +1503,7 @@ fn object_tree(doc: &Doc) -> serde_json::Value {
             };
             let (offset, in_stream) = match loc {
                 Loc::File(off) => (off as u64, serde_json::Value::Null),
-                Loc::InStream(off, _) => (off as u64, json!(true)),
+                Loc::InStream(off, stm) => (off as u64, json!(stm)),
             };
             let ty = o
                 .as_dict()

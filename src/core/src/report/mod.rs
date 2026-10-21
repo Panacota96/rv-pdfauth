@@ -21,11 +21,16 @@ pub const SCHEMA_TECHNICAL: &str = "rakvor.item-technical/1";
 pub const SCHEMA_SUMMARY: &str = "rakvor.item-summary/1";
 
 /// Run-level limitations, always printed (what this tool cannot tell you).
-pub const LIMITATIONS: [&str; 4] = [
+pub const LIMITATIONS: [&str; 9] = [
     "SIGNATURE_TABLE_LIMITED",
     "TIMESTAMPS_FROM_FILESYSTEM",
     "CLEAN_RESULT_IS_NOT_AUTHENTICITY",
     "TIMESTAMP_PROVES_EXISTENCE_ONLY",
+    "NO_FINDING_IS_NOT_AUTHENTICITY",
+    "FLATTENED_OR_REGENERATED_PDF_LOSES_HISTORY",
+    "FINGERPRINT_DB_COVERAGE",
+    "SIGNATURE_TRUST_NOT_VALIDATED",
+    "RENDERING_PAGE_CAP",
 ];
 pub const SCHEMA_CUSTODY: &str = "rakvor.item-custody/1";
 const BLANK_TRANSFER_ROWS: usize = 6;

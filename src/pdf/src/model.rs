@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 #[serde(default)]
 pub struct PdfOptions {
     /// Extra fingerprint databases (JSON, same format as fingerprints/starter.json), already loaded by the core.
+    /// The bundled starter DB is always used; a DB with the same name and version as one already in use is skipped.
     pub fingerprints: Vec<FingerprintDb>,
     /// Include the full object tree in `PdfReport::object_tree` (can be large).
     pub object_tree: bool,

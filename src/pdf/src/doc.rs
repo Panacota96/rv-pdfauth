@@ -111,6 +111,7 @@ pub struct ObjStm {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Loc {
     File(usize),
+    /// Inside an object stream: (file offset of the object stream, its object number).
     InStream(usize, u32),
 }
 
@@ -1018,7 +1019,7 @@ impl<'a> Doc<'a> {
                     XEntry::InUse { offset, .. } => usize::try_from(offset).ok(),
                     _ => None,
                 })?;
-                found.map(|o| (o, Loc::InStream(offset, r.0)))
+                found.map(|o| (o, Loc::InStream(offset, stm)))
             }
             Some((_, XEntry::Free)) => None,
             None => {

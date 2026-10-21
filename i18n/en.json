@@ -156,7 +156,22 @@
     "pdfs_signed": "PDFs with digital signatures",
     "pdfs_online_editor": "PDFs with an online-editor fingerprint",
     "item_reports_skipped": "Items without report files (--item-reports flagged, no issues found)",
-    "report_not_written": "no report (no issues found)"
+    "report_not_written": "no report (no issues found)",
+    "evidence_id": "Evidence ID",
+    "case_registry": "Case registry",
+    "case_status_registered": "Registered at intake by this run",
+    "case_status_already_registered": "Already registered (same path, same content)",
+    "case_status_verified": "Verified: identical to the registered evidence",
+    "case_status_mismatch": "MISMATCH with the registered evidence",
+    "case_status_not_in_registry": "Not in the case registry",
+    "case_verification": "Case folder",
+    "registered": "With an evidence ID from intake",
+    "added": "Newly registered by this run",
+    "verified": "Verified against the registry",
+    "mismatched": "Different from the registry",
+    "unregistered": "Not in the registry",
+    "intake_date": "Registered at intake (UTC)",
+    "case_dir": "Case folder"
   },
   "severity": {
     "high": "High",
@@ -329,6 +344,21 @@
       "title": "Not a PDF file",
       "shows": "No %PDF- header was found in the first 1024 bytes, so the file was not analysed as a PDF.",
       "does_not_prove": "The file may be another format with a .pdf name, or a damaged PDF; examine it with a tool suited to its real type."
+    },
+    "EVIDENCE_HASH_MISMATCH_WITH_CASE": {
+      "title": "Differs from the evidence registered in the case",
+      "shows": "The %{algorithm} of this file is %{actual}, but evidence %{evidence_id} was registered at intake with %{expected}: the file examined is not bit-identical to the registered item.",
+      "does_not_prove": "Who changed the file, when, or whether the change was deliberate; the analysis still ran so the examiner can decide."
+    },
+    "EVIDENCE_NOT_IN_CASE_REGISTRY": {
+      "title": "Not registered in the case",
+      "shows": "No item of case %{case_id} was registered with this path or this content, so its continuity from intake cannot be shown.",
+      "does_not_prove": "That the file is altered or irrelevant; it may simply not have gone through intake."
+    },
+    "REGISTRY_PATH_CONTENT_CHANGED": {
+      "title": "Registered path now holds different content",
+      "shows": "This path was registered earlier as %{previous_id} with other content; the current content gets a new evidence ID.",
+      "does_not_prove": "Which version is the original or why the content changed."
     }
   },
   "limitations": {
@@ -368,7 +398,8 @@
     "condition": "Condition of packaging / media",
     "examiner": "Examiner",
     "signature_line": "Signature",
-    "observations": "Observations"
+    "observations": "Observations",
+    "intake_date": "Registered at intake (UTC)"
   },
   "ui": {
     "window_title": "Rakvor",
@@ -469,6 +500,10 @@
     "not_proves": "Does not prove",
     "no_findings": "No findings.",
     "regions": "regions",
-    "col_findings": "Findings"
+    "col_findings": "Findings",
+    "case_dir": "Case folder",
+    "case_dir_hint": "optional: shared case folder (links the tools of one case)",
+    "out_from_case": "Output folder: set by the case folder",
+    "evidence_ids": "Evidence IDs"
   }
 }

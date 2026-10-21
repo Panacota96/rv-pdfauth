@@ -40,6 +40,7 @@ flowchart LR
 | **Progress** | Progress bar, elapsed time, throughput and estimated time remaining (CLI and GUI). Cancel at any time. |
 | **Auditable** | Every action goes to `logs/<RUN-ID>/audit.jsonl`, where each entry carries the hash of the previous one. `verify-log` detects any edit. |
 | **Reports** | A statistics report per run, and for **each file** a technical review and a customer summary — HTML, PDF and JSON, in English, Spanish or French. |
+| **Case folder** | `--case-dir` links the Rakvor tools of one case: each PDF is re-hashed and verified against the evidence registry written at intake by rv-hashinv (`E0001`, …) before it is analysed; see [docs/case-folder.md](docs/case-folder.md). |
 
 ## Install
 
@@ -122,6 +123,7 @@ flowchart TB
 | [docs/usage-cli.md](docs/usage-cli.md) | Every command and option (generated from `--help`) |
 | [docs/usage-gui.md](docs/usage-gui.md) | Using the desktop app |
 | [docs/architecture.md](docs/architecture.md) | How the engine, CLI and GUI fit together |
+| [docs/case-folder.md](docs/case-folder.md) | Shared case folder: verifying each PDF against the rv-hashinv evidence registry (`--case-dir`, `verify-case`) |
 | [docs/forensic-audit.md](docs/forensic-audit.md) | Audit trail, hash chain, evidence handling, ISO/IEC 27037 mapping |
 | [docs/reports.md](docs/reports.md) | Report kinds, fields, JSON schemas, languages |
 | [docs/development.md](docs/development.md) | Building, testing, CI/CD and releasing |

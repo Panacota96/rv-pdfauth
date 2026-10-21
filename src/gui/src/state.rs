@@ -4,7 +4,7 @@
 use rv_pdfauth_core::analyzer::{DomainOptions, Finding, Isolation, Severity};
 use rv_pdfauth_core::report::ItemResult;
 use rv_pdfauth_core::{
-    Event, HashAlgo, RunConfig, RunSummary, TOOL_NAME, TOOL_VERSION, hash, i18n,
+    CASE_ROLE, Event, HashAlgo, RunConfig, RunSummary, TOOL_NAME, TOOL_VERSION, case, hash, i18n,
     time::human_duration,
 };
 use serde_json::{Value, json};
@@ -63,6 +63,8 @@ pub struct ResultRow {
     pub findings: usize,
     pub top: Option<Severity>,
     pub revisions: usize,
+    /// Case folder only: the item's evidence id (E0001…) from the registry.
+    pub evidence_id: Option<String>,
     /// Position in [`Viewer::items`] when the item has something to review (two or more revisions).
     pub viewer_item: Option<usize>,
 }
@@ -96,6 +98,16 @@ pub struct Outcome {
     pub info: u64,
     pub report: PathBuf,
     pub log_dir: PathBuf,
+}
+
+/// One item's link to the case registry, shown in the result panel.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EvidenceLink {
+    pub index: u64,
+    pub path: String,
+    pub evidence_id: Option<String>,
+    /// registered | already_registered | verified | mismatch | not_in_registry
+    pub status: String,
 }
 
 pub const LANG_CHOICES: [(&str, &str); 4] = [
@@ -136,6 +148,10 @@ pub struct GuiState {
     pub fp_db_entry: String,
     pub results: Vec<ResultRow>,
     pub viewer: Viewer,
+    /// Shared case folder; when set, the output folder is derived from it and locked.
+    pub case_dir: String,
+    /// Evidence ids reported by the last run (case folder only).
+    pub evidence: Vec<EvidenceLink>,
 }
 
 impl Default for GuiState {
@@ -165,6 +181,8 @@ impl Default for GuiState {
             fp_db_entry: String::new(),
             results: vec![],
             viewer: Viewer::default(),
+            case_dir: String::new(),
+            evidence: vec![],
         }
     }
 }
@@ -363,16 +381,77 @@ impl GuiState {
             "item_reports": if o.item_reports_flagged_only { "flagged" } else { "all" }})
     }
 
+    /// Rule: with a case folder the output folder is `<case>/runs/<tool>/<RUN-ID>` and cannot be edited.
+    pub fn set_case_dir(&mut self, path: &str) {
+        let path = path.trim().trim_matches('"').to_string();
+        if self.case_dir != path {
+            self.case_dir = path.clone();
+            self.note(
+                "ui_case_dir_changed",
+                json!({"path": if path.is_empty() { Value::Null } else { json!(path) }, "role": CASE_ROLE.name()}),
+            );
+        }
+    }
+
+    pub fn out_locked(&self) -> bool {
+        !self.case_dir.trim().is_empty()
+    }
+
+    /// What the output-folder field shows: the derived run folder when a case folder is set.
+    pub fn out_dir_display(&self) -> String {
+        if self.out_locked() {
+            PathBuf::from(self.case_dir.trim())
+                .join("runs")
+                .join(TOOL_NAME)
+                .join("<RUN-ID>")
+                .display()
+                .to_string()
+        } else {
+            self.out_dir.clone()
+        }
+    }
+
+    /// Result-panel lines: "E0001  acta.txt  — Verified: identical to the registered evidence".
+    pub fn evidence_lines(&self) -> Vec<String> {
+        let c = i18n::catalog(&self.ui_lang);
+        self.evidence
+            .iter()
+            .map(|e| {
+                let name = std::path::Path::new(&e.path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| e.path.clone());
+                format!(
+                    "{}  {}  \u{2014} {}",
+                    e.evidence_id.as_deref().unwrap_or("\u{2014}"),
+                    name,
+                    c.label(&format!("case_status_{}", e.status))
+                )
+            })
+            .collect()
+    }
+
     pub fn can_start(&self) -> bool {
-        !self.is_running() && !self.inputs.is_empty() && !self.out_dir.trim().is_empty()
+        !self.is_running()
+            && (!self.inputs.is_empty() || self.out_locked())
+            && (self.out_locked() || !self.out_dir.trim().is_empty())
     }
 
     /// Builds the run configuration; the recorded UI actions become audit preamble entries.
     pub fn to_config(&self) -> Result<RunConfig, String> {
-        if self.inputs.is_empty() {
+        if self.inputs.is_empty() && !self.out_locked() {
             return Err("Add at least one file or folder.".into());
         }
         hash::validate_selection(&self.selected)?;
+        let case_id = Some(self.case_id.trim().to_string()).filter(|s| !s.is_empty());
+        if self.out_locked() {
+            case::preflight(
+                std::path::Path::new(self.case_dir.trim()),
+                case_id.as_deref(),
+                &[],
+            )
+            .map_err(|e| e.message)?;
+        }
         let langs = i18n::parse_langs(&self.lang)?;
         if !self.sign_cert.is_empty() && !std::path::Path::new(&self.sign_cert).is_file() {
             return Err(format!("Signing certificate not found: {}", self.sign_cert));
@@ -386,6 +465,7 @@ impl GuiState {
         preamble.push(("ui_start_clicked".into(), json!({"algorithms": self.selected, "lang": self.lang, "recursive": self.recursive,
             "inputs": self.inputs.len(), "jurisdiction": self.jurisdiction, "timestamp": self.timestamp,
             "pdf_signing": !self.sign_cert.is_empty(), "options": self.options_json(),
+            "case_dir": if self.out_locked() { json!(self.case_dir.trim()) } else { Value::Null },
             "at_utc": rv_pdfauth_core::time::utc_now()})));
         let settings = vec![
             format!("{} (gui)", TOOL_NAME),
@@ -407,7 +487,15 @@ impl GuiState {
             ),
             format!("lang={}", self.lang),
             format!("recursive={}", self.recursive),
-            format!("out={}", self.out_dir.trim()),
+            format!("out={}", self.out_dir_display().trim()),
+            format!(
+                "case_dir={}",
+                if self.out_locked() {
+                    self.case_dir.trim()
+                } else {
+                    "none"
+                }
+            ),
             format!("jurisdiction={}", self.jurisdiction),
             format!(
                 "tsa={}",
@@ -439,7 +527,7 @@ impl GuiState {
             } else {
                 self.actor.trim().to_string()
             },
-            case_id: Some(self.case_id.trim().to_string()).filter(|s| !s.is_empty()),
+            case_id,
             frontend: "gui".into(),
             preamble,
             command_line: settings,
@@ -462,6 +550,13 @@ impl GuiState {
                 Some(self.sign_password.clone())
             },
             domain: self.domain_options(),
+            case_dir: if self.out_locked() {
+                Some(PathBuf::from(self.case_dir.trim()))
+            } else {
+                None
+            },
+            evidence_ids: vec![],
+            case_role: CASE_ROLE,
         })
     }
 
@@ -473,6 +568,7 @@ impl GuiState {
         self.outcome = None;
         self.results.clear();
         self.viewer = Viewer::default();
+        self.evidence.clear();
         // Recorded actions now belong to this run's audit log.
         self.ui_actions.clear();
     }
@@ -488,6 +584,17 @@ impl GuiState {
                 self.progress.bytes_total = *total_bytes;
             }
             Event::ItemStarted { path, .. } => self.current_item = path.clone(),
+            Event::EvidenceLinked {
+                index,
+                path,
+                evidence_id,
+                status,
+            } => self.evidence.push(EvidenceLink {
+                index: *index,
+                path: path.clone(),
+                evidence_id: evidence_id.clone(),
+                status: status.clone(),
+            }),
             Event::Progress {
                 done,
                 total,
@@ -563,6 +670,7 @@ impl GuiState {
                 findings: r.findings.len(),
                 top: r.findings.iter().map(|f| f.severity).max(),
                 revisions: r.details["revisions"].as_array().map_or(0, Vec::len),
+                evidence_id: r.evidence_id.clone(),
                 viewer_item: self.viewer.item_for_index(r.index),
             })
             .collect();
@@ -597,6 +705,21 @@ impl GuiState {
             .collect();
         out.sort_by_key(|f| std::cmp::Reverse(f.severity));
         out
+    }
+
+    /// Viewer header: "#3  E0003  original.pdf" in a case folder ("#3  original.pdf" otherwise), and the
+    /// registry check in the interface language ("Verified: identical to the registered evidence").
+    pub fn viewer_header(&self) -> Option<(String, Option<String>)> {
+        let it = self.viewer.current_item()?;
+        let title = match &it.evidence_id {
+            Some(id) => format!("#{}  {}  {}", it.index, id, it.name),
+            None => format!("#{}  {}", it.index, it.name),
+        };
+        let check = it
+            .case_status
+            .as_ref()
+            .map(|st| i18n::catalog(&self.ui_lang).label(&format!("case_status_{}", st)));
+        Some((title, check))
     }
 
     pub fn severity_name(&self, s: Severity) -> String {
@@ -751,6 +874,10 @@ impl PairView {
 pub struct ViewItem {
     pub index: u64,
     pub name: String,
+    /// Case folder only: evidence id (E0001…) and how the item relates to the case registry
+    /// (verified | mismatch | not_in_registry), shown in the viewer header.
+    pub evidence_id: Option<String>,
+    pub case_status: Option<String>,
     /// `<report dir>/items/<NNNNN-name>/`
     pub dir: PathBuf,
     pub findings: Vec<Finding>,
@@ -920,6 +1047,8 @@ impl ViewItem {
         ViewItem {
             index: r.index,
             name: r.file_name(),
+            evidence_id: r.evidence_id.clone(),
+            case_status: r.case_status.clone(),
             dir: report_dir.join("items").join(r.folder()),
             findings: r.findings.clone(),
             revisions,
@@ -1247,6 +1376,67 @@ mod tests {
     }
 
     #[test]
+    fn case_folder_locks_the_output_folder_and_shows_evidence_ids() {
+        let tmp = std::env::temp_dir().join(format!("rv-gui-case-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("ev")).unwrap();
+        std::fs::write(tmp.join("ev/a.txt"), "a").unwrap();
+        std::fs::write(tmp.join("ev/b.txt"), "b").unwrap();
+        let mut s = GuiState {
+            timestamp: false,
+            ..Default::default()
+        };
+        assert!(!s.can_start());
+        let case_dir = tmp.join("CASE-G");
+        s.set_case_dir(&format!("\"{}\"", case_dir.display()));
+        assert!(
+            s.out_locked() && s.can_start(),
+            "a case folder alone can start (registered items)"
+        );
+        assert!(s.out_dir_display().contains("runs") && s.out_dir_display().ends_with("<RUN-ID>"));
+        assert!(s.to_config().is_err(), "creating a case needs a case id");
+        s.case_id = "CASE-G".into();
+        s.add_input(tmp.join("ev"));
+        if CASE_ROLE == rv_pdfauth_core::CaseRole::Analysis {
+            // An analysis tool verifies against a registry: create it with an explicit intake run first.
+            let seed = RunConfig {
+                inputs: vec![tmp.join("ev")],
+                case_id: Some("CASE-G".into()),
+                case_dir: Some(case_dir.clone()),
+                case_role: rv_pdfauth_core::CaseRole::Intake,
+                ..Default::default()
+            };
+            let off = std::sync::atomic::AtomicBool::new(false);
+            rv_pdfauth_core::run(&seed, &mut |_| {}, &off).unwrap();
+        }
+        let cfg = s.to_config().unwrap();
+        assert_eq!(cfg.case_dir.as_deref(), Some(case_dir.as_path()));
+        assert_eq!(cfg.case_role, CASE_ROLE);
+        let actions: Vec<&str> = cfg.preamble.iter().map(|(a, _)| a.as_str()).collect();
+        assert_eq!(actions[0], "ui_case_dir_changed");
+        s.start();
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        let summary = rv_pdfauth_core::run(&cfg, &mut |e| s.apply(e), &cancel).unwrap();
+        assert_eq!(s.phase, Phase::Finished);
+        assert!(summary.log_dir.starts_with(&case_dir));
+        let ids: Vec<Option<&str>> = s
+            .evidence
+            .iter()
+            .map(|e| e.evidence_id.as_deref())
+            .collect();
+        assert_eq!(ids, vec![Some("E0001"), Some("E0002")]);
+        assert!(s.evidence_lines()[0].starts_with("E0001  a.txt"));
+        assert!(s.evidence_lines()[0].contains("Verified"));
+        s.load_results(&summary);
+        assert_eq!(s.results[1].evidence_id.as_deref(), Some("E0002"));
+        let log = std::fs::read_to_string(summary.log_dir.join("audit.jsonl")).unwrap();
+        assert!(log.contains("\"ui_case_dir_changed\"") && log.contains("\"case_linked\""));
+        s.set_case_dir("");
+        assert!(!s.out_locked() && s.out_dir_display() == "rakvor-out");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
     fn a_real_run_from_gui_settings_is_audited() {
         let ev = std::env::temp_dir().join(format!("rv-gui-test-{}", std::process::id()));
         std::fs::create_dir_all(&ev).unwrap();
@@ -1385,6 +1575,30 @@ mod tests {
             ],
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn viewer_header_shows_the_evidence_id_in_a_case_folder() {
+        let mut s = GuiState {
+            viewer: sample_viewer(),
+            ..Default::default()
+        };
+        s.viewer.open_item(0);
+        assert_eq!(s.viewer_header().unwrap(), ("#1  a.pdf".to_string(), None));
+        s.viewer.items[1].evidence_id = Some("E0007".into());
+        s.viewer.items[1].case_status = Some("mismatch".into());
+        s.viewer.open_item(1);
+        let (title, check) = s.viewer_header().unwrap();
+        assert_eq!(title, "#4  E0007  b.pdf");
+        assert_eq!(
+            check.as_deref(),
+            Some("MISMATCH with the registered evidence")
+        );
+        s.ui_lang = "es".into();
+        assert_eq!(
+            s.viewer_header().unwrap().1.as_deref(),
+            Some("NO COINCIDE con la evidencia registrada")
+        );
     }
 
     #[test]

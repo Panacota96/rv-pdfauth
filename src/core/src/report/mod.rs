@@ -64,12 +64,44 @@ pub struct RunInfo {
     /// `--item-reports flagged`: no per-item report files for items whose status is ok (they are still
     /// listed in the statistics report and the audit log records the skip).
     pub item_reports_flagged_only: bool,
+    /// Set when the run works in a shared case folder (`--case-dir`).
+    pub case: Option<CaseInfo>,
 }
 
 impl RunInfo {
     /// True when this item gets no report files (`--item-reports flagged` and status ok).
     pub fn skips_item_reports(&self, it: &ItemResult) -> bool {
         self.item_reports_flagged_only && it.status() == "ok"
+    }
+}
+
+/// Counts of how the run's items relate to the case registry.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct CaseTally {
+    /// Items that carry an evidence id from intake (new or already registered).
+    pub registered: u64,
+    /// Of those, newly added to the registry by this run.
+    pub added: u64,
+    pub verified: u64,
+    pub mismatched: u64,
+    pub unregistered: u64,
+}
+
+#[derive(Clone, Debug)]
+pub struct CaseInfo {
+    pub case_id: String,
+    /// "intake" | "analysis"
+    pub role: String,
+    pub dir: String,
+    pub tally: CaseTally,
+}
+
+impl CaseInfo {
+    pub fn to_json(&self) -> Value {
+        let t = &self.tally;
+        json!({"case_id": self.case_id, "role": self.role, "case_dir": self.dir,
+               "counts": {"registered": t.registered, "added": t.added, "verified": t.verified,
+                          "mismatched": t.mismatched, "unregistered": t.unregistered}})
     }
 }
 
@@ -89,6 +121,11 @@ pub struct ItemResult {
     pub outputs: Vec<OutputRecord>,
     pub audit_first_seq: u64,
     pub audit_last_seq: u64,
+    /// Case folder only: evidence id (E0001…), relation to the registry and intake date.
+    pub evidence_id: Option<String>,
+    /// registered | already_registered | verified | mismatch | not_in_registry
+    pub case_status: Option<String>,
+    pub intake_utc: Option<String>,
 }
 
 /// A file written by the analysis, after the pipeline hashed and audited it.
@@ -330,6 +367,7 @@ pub fn statistics_context(
         .iter()
         .map(|it| {
             json!({"index": it.index, "file_name": it.file_name(), "size": it.size, "finding_count": it.findings.len(),
+                   "evidence_id": it.evidence_id,
                    "status": it.status(), "status_label": c.label(&format!("status_{}", it.status())),
                    "has_reports": !run.skips_item_reports(it),
                    "link": format!("items/{}/technical.{}.html", it.folder(), lang)})
@@ -353,11 +391,20 @@ pub fn statistics_context(
             {"label": c.label("item_reports_skipped"), "count": skipped},
         ]),
     );
+    m.insert("case".into(), case_view(run));
     m.insert(
         "audit".into(),
         json!({"head": audit.head, "entries": audit.entries, "log_dir": audit.log_dir}),
     );
     Value::Object(m)
+}
+
+fn case_view(run: &RunInfo) -> Value {
+    run.case.as_ref().map(|c| {
+        let t = &c.tally;
+        json!({"case_id": c.case_id, "role": c.role, "dir": c.dir, "registered": t.registered, "added": t.added,
+               "verified": t.verified, "mismatched": t.mismatched, "unregistered": t.unregistered})
+    }).unwrap_or(Value::Null)
 }
 
 fn item_view(c: &Catalog, it: &ItemResult) -> Value {
@@ -376,6 +423,8 @@ fn item_view(c: &Catalog, it: &ItemResult) -> Value {
         "summary_text": c.label(&format!("summary_{}", status)), "next_text": c.label(&format!("next_{}", status)),
         "primary_algorithm": alg, "primary_hash": hash,
         "audit_first_seq": it.audit_first_seq, "audit_last_seq": it.audit_last_seq,
+        "evidence_id": it.evidence_id, "intake_utc": it.intake_utc, "case_status": it.case_status,
+        "case_status_label": it.case_status.as_ref().map(|s| c.label(&format!("case_status_{}", s))),
     })
 }
 
@@ -383,6 +432,7 @@ pub fn item_context(lang: &str, run: &RunInfo, it: &ItemResult, audit: &AuditRef
     let c = catalog(lang);
     let mut m = base(c, run);
     m.insert("item".into(), item_view(c, it));
+    m.insert("case".into(), case_view(run));
     m.insert(
         "hash_rows".into(),
         json!(
@@ -478,7 +528,8 @@ pub fn statistics_json(
         "totals": {"items": totals.items, "bytes": totals.bytes, "errors": totals.errors},
         "findings_by_severity": sev, "findings_by_code": codes, "items_by_status": status, "items_by_type": types,
         "duplicate_groups": duplicate_groups(items).into_iter().map(|(h, idx)| json!({"hash": h, "items": idx.iter().map(|&i| items[i].index).collect::<Vec<_>>()})).collect::<Vec<_>>(),
-        "items": items.iter().map(|it| json!({"index": it.index, "path": it.path.display().to_string(), "size": it.size, "status": it.status(),
+        "case": run.case.as_ref().map(|c| c.to_json()),
+        "items": items.iter().map(|it| json!({"index": it.index, "evidence_id": it.evidence_id, "path": it.path.display().to_string(), "size": it.size, "status": it.status(),
               "findings": it.findings.iter().map(|f| f.code.clone()).collect::<Vec<_>>(), "report_folder": format!("items/{}", it.folder()),
               "reports_written": !run.skips_item_reports(it)})).collect::<Vec<_>>(),
         "pdf_overview": ov,
@@ -493,9 +544,11 @@ pub fn technical_json(run: &RunInfo, it: &ItemResult) -> Value {
         "schema": SCHEMA_TECHNICAL,
         "tool": {"name": run.tool_name, "version": run.tool_version},
         "run": run_json(run),
-        "item": {"index": it.index, "path": it.path.display().to_string(), "file_name": it.file_name(), "size": it.size,
+        "item": {"index": it.index, "evidence_id": it.evidence_id, "path": it.path.display().to_string(), "file_name": it.file_name(), "size": it.size,
                  "modified_utc": it.modified_utc, "extension": it.extension, "detected_type": it.detected_type,
                  "status": it.status(), "error": it.error},
+        "case": run.case.as_ref().map(|c| json!({"case_id": c.case_id, "role": c.role, "case_dir": c.dir,
+                 "status": it.case_status, "intake_utc": it.intake_utc})),
         "hashes": it.hashes.iter().map(|(a, h)| (a.name().to_string(), json!(h))).collect::<serde_json::Map<_, _>>(),
         "findings": findings_json(it, &run.langs),
         "limitations": LIMITATIONS,
@@ -517,7 +570,7 @@ pub fn summary_json(run: &RunInfo, it: &ItemResult) -> Value {
     json!({
         "schema": SCHEMA_SUMMARY,
         "run_id": run.run_id, "case_id": run.case_id,
-        "item": {"index": it.index, "file_name": it.file_name()},
+        "item": {"index": it.index, "evidence_id": it.evidence_id, "file_name": it.file_name()},
         "status": it.status(),
         "fingerprint": it.hashes.first().map(|(a, h)| json!({"algorithm": a.name(), "value": h})),
         "findings": findings_json(it, &run.langs),
@@ -672,13 +725,33 @@ pub fn statistics_pdf(ctx: &Value, run: &RunInfo) -> Result<Vec<u8>, String> {
             .map(|r| (s(r, "label"), s(r, "count")))
             .collect(),
     ));
+    if ctx["case"].is_object() {
+        b.push(Block::Heading(t("case_verification")));
+        let mut rows = vec![(t("case"), s(ctx, "case.case_id"))];
+        for k in [
+            "registered",
+            "added",
+            "verified",
+            "mismatched",
+            "unregistered",
+        ] {
+            rows.push((t(k), s(ctx, &format!("case.{}", k))));
+        }
+        rows.push((t("case_dir"), s(ctx, "case.dir")));
+        b.push(Block::Kv(rows));
+    }
     b.push(Block::Heading(t("items")));
     b.push(Block::Kv(
         arr(ctx, "item_rows")
             .iter()
             .map(|r| {
+                let eid = s(r, "evidence_id");
                 (
-                    format!("#{}  {}", s(r, "index"), s(r, "file_name")),
+                    if eid.is_empty() {
+                        format!("#{}  {}", s(r, "index"), s(r, "file_name"))
+                    } else {
+                        format!("#{}  {}  {}", s(r, "index"), eid, s(r, "file_name"))
+                    },
                     format!(
                         "{} \u{00B7} {} {} \u{00B7} {} {}",
                         s(r, "status_label"),
@@ -907,14 +980,30 @@ pub fn technical_pdf(ctx: &Value, run: &RunInfo) -> Result<Vec<u8>, String> {
             s(ctx, "run.run_id")
         ),
     );
-    b.push(Block::Kv(vec![
+    let mut rows = vec![
         (t("path"), s(ctx, "item.path")),
         (t("size"), s(ctx, "item.size")),
         (t("modified"), s(ctx, "item.modified_utc")),
         (t("extension"), s(ctx, "item.extension_text")),
         (t("detected_type"), s(ctx, "item.detected_text")),
         (t("status"), s(ctx, "item.status_label")),
-    ]));
+    ];
+    if ctx["case"].is_object() {
+        rows.push((t("case"), s(ctx, "case.case_id")));
+        rows.push((
+            t("evidence_id"),
+            if s(ctx, "item.evidence_id").is_empty() {
+                t("none")
+            } else {
+                s(ctx, "item.evidence_id")
+            },
+        ));
+        rows.push((t("case_registry"), s(ctx, "item.case_status_label")));
+        if !s(ctx, "item.intake_utc").is_empty() {
+            rows.push((t("intake_date"), s(ctx, "item.intake_utc")));
+        }
+    }
+    b.push(Block::Kv(rows));
     b.push(Block::Heading(t("hashes")));
     b.push(Block::Kv(
         arr(ctx, "hash_rows")
@@ -963,6 +1052,14 @@ pub fn technical_pdf(ctx: &Value, run: &RunInfo) -> Result<Vec<u8>, String> {
 pub fn summary_pdf(ctx: &Value, run: &RunInfo) -> Result<Vec<u8>, String> {
     let t = |k: &str| s(ctx, &format!("t.{}", k));
     let mut sub = s(ctx, "item.file_name");
+    if !s(ctx, "item.evidence_id").is_empty() {
+        sub = format!(
+            "{} \u{00B7} {}: {}",
+            sub,
+            t("evidence_id"),
+            s(ctx, "item.evidence_id")
+        );
+    }
     if !s(ctx, "run.case_id").is_empty() {
         sub = format!("{} \u{00B7} {}: {}", sub, t("case"), s(ctx, "run.case_id"));
     }
@@ -1022,7 +1119,8 @@ pub fn custody_context(lang: &str, run: &RunInfo, it: &ItemResult, audit: &Audit
     cu["basis"] = json!(get(&format!("basis_{}", j)));
     cu["case_label"] = json!(get(&format!("case_{}", j)));
     cu["evidence_id_label"] = json!(get(&format!("evidence_id_{}", j)));
-    cu["evidence_id"] = json!(format!("{}-{:05}", run.run_id, it.index));
+    cu["evidence_id"] = json!(custody_evidence_id(run, it));
+    cu["intake_utc"] = json!(it.intake_utc);
     cu["jurisdiction_label"] = json!(c.ui(&format!("jur_{}", j)));
     cu["operation_text"] = json!(crate::i18n::fill(&get("operation_text"), &params));
     cu["blank_rows"] = json!((0..BLANK_TRANSFER_ROWS).collect::<Vec<_>>());
@@ -1030,12 +1128,20 @@ pub fn custody_context(lang: &str, run: &RunInfo, it: &ItemResult, audit: &Audit
     ctx
 }
 
+/// The case registry id (E0001…) when the run is linked to a case, else "<RUN-ID>-<NNNNN>".
+fn custody_evidence_id(run: &RunInfo, it: &ItemResult) -> String {
+    it.evidence_id
+        .clone()
+        .unwrap_or_else(|| format!("{}-{:05}", run.run_id, it.index))
+}
+
 pub fn custody_json(run: &RunInfo, it: &ItemResult) -> Value {
     json!({
         "schema": SCHEMA_CUSTODY,
         "jurisdiction": run.jurisdiction,
         "run_id": run.run_id, "case_id": run.case_id,
-        "evidence_id": format!("{}-{:05}", run.run_id, it.index),
+        "evidence_id": custody_evidence_id(run, it),
+        "intake_utc": it.intake_utc,
         "item": {"index": it.index, "path": it.path.display().to_string(), "file_name": it.file_name(), "size": it.size},
         "hashes": it.hashes.iter().map(|(a, h)| (a.name().to_string(), json!(h))).collect::<serde_json::Map<_, _>>(),
         "examiner": run.actor,
@@ -1112,9 +1218,12 @@ pub fn custody_pdf(ctx: &Value, run: &RunInfo) -> Result<Vec<u8>, String> {
             format!("{} \u{2014} {}", c("received_by"), c("signature_line")),
         ]),
     ];
-    if s(ctx, "run.case_id").is_empty() {
-        if let Some(Block::Kv(rows)) = b.get_mut(3) {
+    if let Some(Block::Kv(rows)) = b.get_mut(3) {
+        if s(ctx, "run.case_id").is_empty() {
             rows[0].1 = String::new();
+        }
+        if !c("intake_utc").is_empty() {
+            rows.insert(2, (c("intake_date"), c("intake_utc")));
         }
     }
     finish(ctx, &c("title"), &b, run)

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Validates every JSON report of a run against schemas/. Usage: python tests/validate_reports.py <OUT>/reports/<RUN-ID>"""
+"""Validates every JSON report of a run against schemas/.
+
+Usage: python tests/validate_reports.py <OUT>/reports/<RUN-ID>
+       python tests/validate_reports.py <CASE>     (a whole case folder: case.json, registry.json and every run's reports)
+"""
 import json
 import pathlib
 import sys
@@ -12,6 +16,8 @@ SCHEMAS = {
     "technical.json": "item-technical.schema.json",
     "summary.json": "item-summary.schema.json",
     "custody.json": "item-custody.schema.json",
+    "case.json": "case.schema.json",
+    "registry.json": "registry.schema.json",
 }
 
 

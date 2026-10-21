@@ -7,7 +7,7 @@ use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use rv_pdfauth_core::trust::{self, DEFAULT_TSA};
 use rv_pdfauth_core::{
-    Event, HashAlgo, RunConfig, TOOL_NAME, TOOL_VERSION, audit, hash, i18n, run,
+    CASE_ROLE, Event, HashAlgo, RunConfig, TOOL_NAME, TOOL_VERSION, audit, case, hash, i18n, run,
 };
 use std::io::Write;
 use std::path::PathBuf;
@@ -38,7 +38,13 @@ DESCRIPTION:
   Each run also writes a statistics report and an audit trail under <OUT>/logs/<RUN-ID>/. Every
   action is appended to a hash-chained log that `rv-pdfauth verify-log` can check later.
   The result is a set of signals for an examiner, never a verdict that a document is authentic or
-  forged.";
+  forged.
+
+  CASE FOLDER (--case-dir): Rakvor tools share one folder per case. rv-hashinv, the intake tool,
+  registers each evidence file once (evidence ids E0001, E0002, ...). rv-pdfauth is an analysis tool:
+  before analysing a PDF it re-hashes it and verifies it against that registry, so the reports prove
+  the examined file is bit-identical to the registered one. `rv-pdfauth verify-case <CASE>` checks
+  the whole case.";
 
 const ANALYZE_AFTER_HELP: &str = "\
 EXAMPLES:
@@ -53,13 +59,22 @@ EXAMPLES:
       --fingerprints-db case-014-fingerprints.json
   Verify the audit log afterwards:
     rv-pdfauth verify-log rakvor-out/logs/<RUN-ID>/audit.jsonl
+  Analyse every item registered in a case folder (after rv-hashinv intake), then verify the case:
+    rv-pdfauth analyze --case-dir E:\\CASE-014
+    rv-pdfauth verify-case E:\\CASE-014
+  Analyse two registered items of the case only:
+    rv-pdfauth analyze --case-dir E:\\CASE-014 --evidence E0001,E0002
 
 EXIT CODES:
   0    Completed; no high-severity finding.
-  1    Runtime error (input not found, output not writable, ...). See the audit log.
+  1    Runtime error (input not found, output not writable, case log locked, ...).
+       See the audit log.
   2    Usage error (unknown option, more than two hash algorithms, unsupported language).
+       With --case-dir: folder of another case or schema, --case missing when creating the
+       case, unknown evidence id.
   3    Completed with at least one high-severity finding (e.g. a signed revision changed afterwards,
-       a file that could not be parsed).
+       a file that could not be parsed, evidence that differs from the case registry), or the
+       case folder fails verification (nothing is written to it).
   130  Cancelled with Ctrl+C. Partial reports and the cancellation are written to the audit log.
 
 FILES WRITTEN:
@@ -79,6 +94,11 @@ FILES WRITTEN:
   <ITEM>/objects.json                      Object tree of every revision.
   <ITEM>/embedded/NN-<NAME>.jpg|.bin       Attachments and images as stored (+ .inflated.* copy).
   Every file under <ITEM> is hashed with the selected algorithms and recorded in the audit log.
+  With --case-dir <CASE>, logs/ and reports/ go to <CASE>/runs/rv-pdfauth/<RUN-ID>/, and:
+  <CASE>/case-log.jsonl                    Hash-chained case log of every tool: run_started and
+                                           run_finished of this run are appended to it.
+  <CASE>/case.json                         Case id and jurisdiction (only if the folder is new).
+  The evidence registry (<CASE>/evidence/registry.json) is read, never written, by rv-pdfauth.
 
 FORENSIC NOTES:
   - Evidence is opened read-only and never modified; modification times are compared before and
@@ -101,7 +121,17 @@ FORENSIC NOTES:
   - The chain head is timestamped by an RFC 3161 authority (proves when the log existed). Offline?
     The run finishes with `timestamp_pending`; run `rv-pdfauth timestamp <LOG>` later.
   - With --sign-cert every PDF is signed with the examiner's certificate; the password is never
-    logged.";
+    logged.
+  - Case folder: every item is compared with the registry (by --evidence id, else by path, else
+    by content) before it is analysed; a different hash is the high finding
+    EVIDENCE_HASH_MISMATCH_WITH_CASE (the analysis still runs), a file not in the registry is
+    EVIDENCE_NOT_IN_CASE_REGISTRY (medium). If no selected algorithm is in the registry, SHA-256
+    (or another registry algorithm) is added and logged as case_algorithm_added.
+  - The case log and registry digest are re-verified before every write; a broken case is
+    refused (exit 3). Appends happen under case-log.lock; a lock older than 10 minutes is
+    reported as stale and never deleted automatically.
+  - Each run's audit.jsonl records case_linked (the case-log entry it started from); the case
+    log records the run's final audit head, so the two chains vouch for each other.";
 
 const FINGERPRINTS_AFTER_HELP: &str = "\
 DESCRIPTION:
@@ -158,7 +188,7 @@ enum Command {
     ///
     /// `scan` is accepted as a hidden alias for one release so existing scripts keep working.
     #[command(long_about = LONG_ABOUT, after_long_help = ANALYZE_AFTER_HELP, alias = "scan")]
-    Analyze(AnalyzeArgs),
+    Analyze(Box<AnalyzeArgs>),
     /// Manage the local producer/editor fingerprint database (learn, list, export). Offline only.
     #[command(subcommand, after_long_help = FINGERPRINTS_AFTER_HELP)]
     Fingerprints(FingerprintsCmd),
@@ -213,6 +243,28 @@ EXIT CODES:
         #[arg(short, long, value_name = "NAME", verbatim_doc_comment)]
         actor: Option<String>,
     },
+    /// Verify a whole case folder: case log, evidence registry and every run's audit log.
+    #[command(after_long_help = "\
+CHECKS:
+  - case-log.jsonl is an intact hash chain starting with case_created; case.json is unchanged;
+  - evidence/registry.json has the SHA-256 recorded at the last registry change;
+  - every run announced in the case log (by any Rakvor tool) has an intact audit.jsonl (and
+    valid timestamp tokens), its case_linked entry points to its run_started entry, and the
+    audit head recorded at run_finished is its final entry (only timestamp_obtained may follow).
+
+EXAMPLES:
+  rv-pdfauth verify-case E:\\CASE-014
+
+EXIT CODES:
+  0  The case folder is intact (warnings, e.g. a run still in progress, are printed).
+  1  The folder is not a case folder (no case.json).
+  3  At least one check failed: the case was edited, truncated or re-ordered.")]
+    VerifyCase {
+        /// The case folder (the one that holds case.json).
+        ///
+        /// Example: E:\CASE-014
+        case: PathBuf,
+    },
     /// Print the full help of every command as Markdown (used to generate docs/usage-cli.md).
     #[command(hide = true)]
     DocsCli,
@@ -234,13 +286,13 @@ struct AnalyzeArgs {
     ///
     /// Folders are reviewed one level deep unless --recursive is given. Symbolic links are not
     /// followed.
-    /// Default: none (required unless --input-list is given).
+    /// Default: none (required unless --input-list, --case-dir or --evidence is given).
     /// Example: --input D:\evidence --input E:\phone-export\chat.txt
     #[arg(
         short,
         long = "input",
         value_name = "PATH",
-        required_unless_present = "input_list",
+        required_unless_present_any = ["input_list", "case_dir", "evidence"],
         verbatim_doc_comment
     )]
     inputs: Vec<PathBuf>,
@@ -273,7 +325,7 @@ struct AnalyzeArgs {
     )]
     hashes: Vec<String>,
 
-    /// Folder where logs/ and reports/ are created. Created if missing.
+    /// Folder where logs/ and reports/ are created. Created if missing. Ignored with --case-dir.
     ///
     /// Default: ./rakvor-out. Example: --out E:\case-014\rv-pdfauth
     #[arg(
@@ -306,8 +358,8 @@ struct AnalyzeArgs {
     #[arg(short, long, value_name = "NAME", verbatim_doc_comment)]
     actor: Option<String>,
 
-    /// Case or engagement identifier printed on the reports.
-    ///
+    /// Case or engagement identifier printed on the reports. With --case-dir it names the case
+    /// when the folder is created, and must match case.json afterwards (it can be left out).
     /// Default: none. Example: --case CASE-2026-014
     #[arg(short, long = "case", value_name = "ID", verbatim_doc_comment)]
     case_id: Option<String>,
@@ -328,7 +380,8 @@ struct AnalyzeArgs {
     progress: ProgressMode,
 
     /// Chain-of-custody form per item: co (Colombia, Fiscalía style, Spanish) or fr (France,
-    /// scellés, French). An English copy is always added.
+    /// scellés, French). An English copy is always added. With --case-dir the case's
+    /// jurisdiction applies.
     /// Default: co
     /// Example: --jurisdiction fr
     #[arg(short, long, value_name = "CC", default_value = "co", value_parser = ["co", "fr"], verbatim_doc_comment, hide_default_value = true, hide_possible_values = true)]
@@ -467,6 +520,27 @@ struct AnalyzeArgs {
         hide_possible_values = true
     )]
     item_reports: ItemReports,
+
+    /// Shared case folder that links the Rakvor tools of one case (see docs/case-folder.md).
+    /// Every item is verified against <DIR>/evidence/registry.json (written by the intake tool,
+    /// rv-hashinv) before it is analysed; outputs go to <DIR>/runs/rv-pdfauth/<RUN-ID>/ and the
+    /// run is recorded in <DIR>/case-log.jsonl. With no --input, every registered item is analysed.
+    /// Default: none (standalone run in --out)
+    /// Example: --case-dir E:\CASE-014
+    #[arg(long, value_name = "DIR", verbatim_doc_comment)]
+    case_dir: Option<PathBuf>,
+
+    /// Registered evidence ids to analyse (needs --case-dir), comma-separated or repeated.
+    /// Default: none (the --input files, or every registered item)
+    /// Example: --evidence E0001,E0007
+    #[arg(
+        short = 'E',
+        long = "evidence",
+        value_name = "IDS",
+        requires = "case_dir",
+        verbatim_doc_comment
+    )]
+    evidence: Vec<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -594,9 +668,10 @@ fn main() -> ExitCode {
     }
     let cli = Cli::parse();
     ExitCode::from(match cli.command {
-        Command::Analyze(a) => analyze(a),
+        Command::Analyze(a) => analyze(*a),
         Command::Fingerprints(f) => fingerprints_cmd(f),
         Command::VerifyLog { log } => verify_log(log),
+        Command::VerifyCase { case } => verify_case(case),
         Command::SelfTest => self_test(),
         Command::Timestamp {
             log,
@@ -685,6 +760,22 @@ fn analyze(a: AnalyzeArgs) -> u8 {
         eprintln!("error: fingerprint database not found: {}", db.display());
         return EXIT_ERROR;
     }
+    let evidence_ids = match case::parse_evidence_ids(&a.evidence) {
+        Ok(ids) => ids,
+        Err(e) => return usage_error(&e.message),
+    };
+    if let Some(dir) = &a.case_dir {
+        // Case problems found before the run map to their own exit codes (2 usage, 3 broken case).
+        if let Err(e) = case::preflight(dir, a.case_id.as_deref(), &evidence_ids) {
+            return match e.exit_code() {
+                EXIT_USAGE => usage_error(&e.message),
+                code => {
+                    eprintln!("error: {}", e.message);
+                    code
+                }
+            };
+        }
+    }
 
     let cancel = Arc::new(AtomicBool::new(false));
     let c = cancel.clone();
@@ -730,6 +821,9 @@ fn analyze(a: AnalyzeArgs) -> u8 {
                 .map(|exe| rv_pdfauth_core::analyzer::Isolation::Subprocess { exe })
                 .unwrap_or_default(),
         },
+        case_dir: a.case_dir.clone(),
+        evidence_ids,
+        case_role: CASE_ROLE,
     };
 
     let bar = match a.progress {
@@ -828,6 +922,18 @@ fn analyze(a: AnalyzeArgs) -> u8 {
                     logs = s.log_dir.display()
                 );
                 let _ = writeln!(std::io::stdout(), "{}", out);
+                if let Some(c) = &s.case {
+                    let t = &c.tally;
+                    let _ = writeln!(
+                        std::io::stdout(),
+                        "  case:   {} ({}) verified {}, mismatched {}, not in registry {}",
+                        c.case_id,
+                        c.role,
+                        t.verified,
+                        t.mismatched,
+                        t.unregistered
+                    );
+                }
             }
             if s.cancelled {
                 EXIT_CANCELLED
@@ -942,6 +1048,41 @@ fn verify_log(log: PathBuf) -> u8 {
     }
 }
 
+fn verify_case(dir: PathBuf) -> u8 {
+    if !dir.join(case::CASE_FILE).is_file() {
+        eprintln!(
+            "error: {} is not a case folder (no {})",
+            dir.display(),
+            case::CASE_FILE
+        );
+        return EXIT_ERROR;
+    }
+    let v = case::verify_case(&dir);
+    if v.problems.is_empty() {
+        println!(
+            "OK  case {}: {} case-log entries, {} registered items, {} runs verified: {}",
+            v.case_id,
+            v.entries,
+            v.registry_items,
+            v.runs,
+            dir.display()
+        );
+        for w in &v.warnings {
+            println!("  warning: {}", w);
+        }
+        EXIT_OK
+    } else {
+        println!("BROKEN  case {}: {}", v.case_id, dir.display());
+        for p in &v.problems {
+            println!("  - {}", p);
+        }
+        for w in &v.warnings {
+            println!("  warning: {}", w);
+        }
+        EXIT_FINDINGS
+    }
+}
+
 fn self_test() -> u8 {
     let failed = hash::self_test();
     for (algo, _) in hash::KNOWN_ANSWERS {
@@ -969,7 +1110,7 @@ fn docs_cli() -> String {
     let mut out = String::from(
         "# Command-line reference\n\n<!-- Generated by `rv-pdfauth docs-cli`. Do not edit by hand: CI fails if this file differs. -->\n\n",
     );
-    out.push_str("```mermaid\nflowchart LR\n  A[rv-pdfauth] --> B[analyze]\n  A --> C[verify-log]\n  A --> D[self-test]\n  A --> T[timestamp]\n  A --> G[fingerprints]\n  G --> H[(local fingerprint DB)]\n  H --> B\n  T --> E\n  B --> E[(logs/RUN-ID)]\n  B --> F[(reports/RUN-ID)]\n  C --> E\n```\n\n");
+    out.push_str("```mermaid\nflowchart LR\n  A[rv-pdfauth] --> B[analyze]\n  A --> C[verify-log]\n  A --> D[self-test]\n  A --> T[timestamp]\n  A --> V[verify-case]\n  A --> G[fingerprints]\n  G --> H[(local fingerprint DB)]\n  H --> B\n  T --> E\n  B --> E[(logs/RUN-ID)]\n  B --> F[(reports/RUN-ID)]\n  B -. --case-dir .-> K[(CASE folder)]\n  V --> K\n  C --> E\n```\n\n");
     out.push_str(&format!(
         "## rv-pdfauth\n\n```text\n{}\n```\n\n",
         root.render_long_help().to_string().trim_end()

@@ -8,12 +8,15 @@ flowchart LR
   A --> C[verify-log]
   A --> D[self-test]
   A --> T[timestamp]
+  A --> V[verify-case]
   A --> G[fingerprints]
   G --> H[(local fingerprint DB)]
   H --> B
   T --> E
   B --> E[(logs/RUN-ID)]
   B --> F[(reports/RUN-ID)]
+  B -. --case-dir .-> K[(CASE folder)]
+  V --> K
   C --> E
 ```
 
@@ -36,6 +39,13 @@ DESCRIPTION:
   The result is a set of signals for an examiner, never a verdict that a document is authentic or
   forged.
 
+  CASE FOLDER (--case-dir): Rakvor tools share one folder per case. rv-hashinv, the intake tool,
+  registers each evidence file once (evidence ids E0001, E0002, ...). rv-pdfauth is an analysis
+  tool:
+  before analysing a PDF it re-hashes it and verifies it against that registry, so the reports prove
+  the examined file is bit-identical to the registered one. `rv-pdfauth verify-case <CASE>` checks
+  the whole case.
+
 Usage: rv-pdfauth <COMMAND>
 
 Commands:
@@ -46,6 +56,7 @@ Commands:
   verify-log    Verify that an audit log (audit.jsonl) has not been edited, truncated or re-ordered
   self-test     Check every hash algorithm against known-answer test vectors
   timestamp     Add an RFC 3161 timestamp to a finished run (e.g. after working offline)
+  verify-case   Verify a whole case folder: case log, evidence registry and every run's audit log
   help          Print this message or the help of the given subcommand(s)
 
 Options:
@@ -77,6 +88,13 @@ DESCRIPTION:
   The result is a set of signals for an examiner, never a verdict that a document is authentic or
   forged.
 
+  CASE FOLDER (--case-dir): Rakvor tools share one folder per case. rv-hashinv, the intake tool,
+  registers each evidence file once (evidence ids E0001, E0002, ...). rv-pdfauth is an analysis
+  tool:
+  before analysing a PDF it re-hashes it and verifies it against that registry, so the reports prove
+  the examined file is bit-identical to the registered one. `rv-pdfauth verify-case <CASE>` checks
+  the whole case.
+
 Usage: rv-pdfauth analyze [OPTIONS]
 
 Options:
@@ -85,7 +103,7 @@ Options:
           
           Folders are reviewed one level deep unless --recursive is given. Symbolic links are not
           followed.
-          Default: none (required unless --input-list is given).
+          Default: none (required unless --input-list, --case-dir or --evidence is given).
           Example: --input D:\evidence --input E:\phone-export\chat.txt
 
   -L, --input-list <FILE>
@@ -106,7 +124,7 @@ Options:
           Default: sha256. Example: --hash sha256,md5   or   --hash sha256 --hash blake3
 
   -o, --out <DIR>
-          Folder where logs/ and reports/ are created. Created if missing.
+          Folder where logs/ and reports/ are created. Created if missing. Ignored with --case-dir.
           
           Default: ./rakvor-out. Example: --out E:\case-014\rv-pdfauth
 
@@ -122,8 +140,8 @@ Options:
           Default: the operating-system user name. Example: --actor "Ana Ruiz"
 
   -c, --case <ID>
-          Case or engagement identifier printed on the reports.
-          
+          Case or engagement identifier printed on the reports. With --case-dir it names the case
+          when the folder is created, and must match case.json afterwards (it can be left out).
           Default: none. Example: --case CASE-2026-014
 
   -p, --progress <MODE>
@@ -139,7 +157,8 @@ Options:
 
   -j, --jurisdiction <CC>
           Chain-of-custody form per item: co (Colombia, Fiscalía style, Spanish) or fr (France,
-          scellés, French). An English copy is always added.
+          scellés, French). An English copy is always added. With --case-dir the case's
+          jurisdiction applies.
           Default: co
           Example: --jurisdiction fr
 
@@ -217,6 +236,20 @@ Options:
           Default: all
           Example: --item-reports flagged
 
+      --case-dir <DIR>
+          Shared case folder that links the Rakvor tools of one case (see docs/case-folder.md).
+          Every item is verified against <DIR>/evidence/registry.json (written by the intake tool,
+          rv-hashinv) before it is analysed; outputs go to <DIR>/runs/rv-pdfauth/<RUN-ID>/ and the
+          run is recorded in <DIR>/case-log.jsonl. With no --input, every registered item is
+          analysed.
+          Default: none (standalone run in --out)
+          Example: --case-dir E:\CASE-014
+
+  -E, --evidence <IDS>
+          Registered evidence ids to analyse (needs --case-dir), comma-separated or repeated.
+          Default: none (the --input files, or every registered item)
+          Example: --evidence E0001,E0007
+
   -h, --help
           Print help (see a summary with '-h')
 
@@ -232,13 +265,22 @@ EXAMPLES:
       --fingerprints-db case-014-fingerprints.json
   Verify the audit log afterwards:
     rv-pdfauth verify-log rakvor-out/logs/<RUN-ID>/audit.jsonl
+  Analyse every item registered in a case folder (after rv-hashinv intake), then verify the case:
+    rv-pdfauth analyze --case-dir E:\CASE-014
+    rv-pdfauth verify-case E:\CASE-014
+  Analyse two registered items of the case only:
+    rv-pdfauth analyze --case-dir E:\CASE-014 --evidence E0001,E0002
 
 EXIT CODES:
   0    Completed; no high-severity finding.
-  1    Runtime error (input not found, output not writable, ...). See the audit log.
+  1    Runtime error (input not found, output not writable, case log locked, ...).
+       See the audit log.
   2    Usage error (unknown option, more than two hash algorithms, unsupported language).
+       With --case-dir: folder of another case or schema, --case missing when creating the
+       case, unknown evidence id.
   3    Completed with at least one high-severity finding (e.g. a signed revision changed afterwards,
-       a file that could not be parsed).
+       a file that could not be parsed, evidence that differs from the case registry), or the
+       case folder fails verification (nothing is written to it).
   130  Cancelled with Ctrl+C. Partial reports and the cancellation are written to the audit log.
 
 FILES WRITTEN:
@@ -258,6 +300,11 @@ FILES WRITTEN:
   <ITEM>/objects.json                      Object tree of every revision.
   <ITEM>/embedded/NN-<NAME>.jpg|.bin       Attachments and images as stored (+ .inflated.* copy).
   Every file under <ITEM> is hashed with the selected algorithms and recorded in the audit log.
+  With --case-dir <CASE>, logs/ and reports/ go to <CASE>/runs/rv-pdfauth/<RUN-ID>/, and:
+  <CASE>/case-log.jsonl                    Hash-chained case log of every tool: run_started and
+                                           run_finished of this run are appended to it.
+  <CASE>/case.json                         Case id and jurisdiction (only if the folder is new).
+  The evidence registry (<CASE>/evidence/registry.json) is read, never written, by rv-pdfauth.
 
 FORENSIC NOTES:
   - Evidence is opened read-only and never modified; modification times are compared before and
@@ -281,6 +328,16 @@ FORENSIC NOTES:
     The run finishes with `timestamp_pending`; run `rv-pdfauth timestamp <LOG>` later.
   - With --sign-cert every PDF is signed with the examiner's certificate; the password is never
     logged.
+  - Case folder: every item is compared with the registry (by --evidence id, else by path, else
+    by content) before it is analysed; a different hash is the high finding
+    EVIDENCE_HASH_MISMATCH_WITH_CASE (the analysis still runs), a file not in the registry is
+    EVIDENCE_NOT_IN_CASE_REGISTRY (medium). If no selected algorithm is in the registry, SHA-256
+    (or another registry algorithm) is added and logged as case_algorithm_added.
+  - The case log and registry digest are re-verified before every write; a broken case is
+    refused (exit 3). Appends happen under case-log.lock; a lock older than 10 minutes is
+    reported as stale and never deleted automatically.
+  - Each run's audit.jsonl records case_linked (the case-log entry it started from); the case
+    log records the run's final audit head, so the two chains vouch for each other.
 ```
 
 ## rv-pdfauth fingerprints
@@ -515,5 +572,38 @@ EXIT CODES:
   0  Timestamp obtained and logged.
   1  The TSA could not be reached (nothing changed; try again).
   3  The log is broken: no timestamp is added to a broken chain.
+```
+
+## rv-pdfauth verify-case
+
+```text
+Verify a whole case folder: case log, evidence registry and every run's audit log
+
+Usage: rv-pdfauth verify-case <CASE>
+
+Arguments:
+  <CASE>
+          The case folder (the one that holds case.json).
+          
+          Example: E:\CASE-014
+
+Options:
+  -h, --help
+          Print help (see a summary with '-h')
+
+CHECKS:
+  - case-log.jsonl is an intact hash chain starting with case_created; case.json is unchanged;
+  - evidence/registry.json has the SHA-256 recorded at the last registry change;
+  - every run announced in the case log (by any Rakvor tool) has an intact audit.jsonl (and
+    valid timestamp tokens), its case_linked entry points to its run_started entry, and the
+    audit head recorded at run_finished is its final entry (only timestamp_obtained may follow).
+
+EXAMPLES:
+  rv-pdfauth verify-case E:\CASE-014
+
+EXIT CODES:
+  0  The case folder is intact (warnings, e.g. a run still in progress, are printed).
+  1  The folder is not a case folder (no case.json).
+  3  At least one check failed: the case was edited, truncated or re-ordered.
 ```
 

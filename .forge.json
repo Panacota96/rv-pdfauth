@@ -14,5 +14,6 @@
     "rv-pdfauth-cli",
     "--"
   ],
-  "planned_command": "analyze"
+  "planned_command": "analyze",
+  "case_role": "analysis"
 }

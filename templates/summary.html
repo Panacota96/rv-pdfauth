@@ -5,7 +5,7 @@
 <main>
 <header>
   <div><h1>{{ t.title_summary }}</h1><div>{{ item.file_name }}</div></div>
-  <div class="meta">{% if run.case_id %}<div>{{ t.case }}: {{ run.case_id }}</div>{% endif %}<div>{{ run.finished_utc }}</div></div>
+  <div class="meta">{% if run.case_id %}<div>{{ t.case }}: {{ run.case_id }}</div>{% endif %}{% if item.evidence_id %}<div>{{ t.evidence_id }}: {{ item.evidence_id }}</div>{% endif %}<div>{{ run.finished_utc }}</div></div>
 </header>
 
 <p class="status status-{{ item.status }}">{{ item.status_label }}</p>

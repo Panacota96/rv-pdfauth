@@ -567,6 +567,9 @@ mod tests {
             outputs: vec![],
             audit_first_seq: 1,
             audit_last_seq: 2,
+            evidence_id: None,
+            case_status: None,
+            intake_utc: None,
         }
     }
 

@@ -2,7 +2,11 @@
 
 use assert_cmd::Command;
 use predicates::prelude::*;
+use rv_pdfauth_core::{CASE_ROLE, CaseRole, HashAlgo, RunConfig, run};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
+
+const TOOL: &str = rv_pdfauth_core::TOOL_NAME;
 
 fn bin() -> Command {
     let mut c = Command::cargo_bin("rv-pdfauth").unwrap();
@@ -78,6 +82,8 @@ fn help_has_every_required_section() {
         "--actor",
         "--case",
         "--progress",
+        "--case-dir",
+        "--evidence",
     ] {
         assert!(text.contains(flag), "missing {}", flag);
     }
@@ -368,4 +374,188 @@ fn trust_timestamp_signature_and_custody_with_test_pki() {
         .code(0)
         .stdout(predicate::str::contains("covers entry"));
     let _ = tsa.kill();
+}
+
+fn case_analyze(case: &Path) -> Command {
+    let mut c = bin();
+    c.args(["analyze", "--progress", "none", "--case-dir"])
+        .arg(case);
+    c
+}
+
+/// Analysis-role tools need registered evidence first: an intake run made through the core with the role set
+/// explicitly (what the intake tool, rv-hashinv, does). Intake tools register through their own CLI.
+fn seed_registry(case: &Path, case_id: &str, evidence: &Path) {
+    let cfg = RunConfig {
+        inputs: vec![evidence.to_path_buf()],
+        algorithms: vec![HashAlgo::Sha256, HashAlgo::Md5],
+        actor: "seed".into(),
+        case_id: Some(case_id.into()),
+        jurisdiction: "fr".into(),
+        case_dir: Some(case.to_path_buf()),
+        case_role: CaseRole::Intake,
+        domain: light_analysis(),
+        ..Default::default()
+    };
+    run(&cfg, &mut |_| {}, &AtomicBool::new(false)).unwrap();
+}
+
+/// PDF analysis without revision extraction, rendering or dumps (seeding only needs the hashes), in the
+/// worker process so a hostile sample can never take the test process down.
+fn light_analysis() -> rv_pdfauth_core::analyzer::DomainOptions {
+    rv_pdfauth_core::analyzer::DomainOptions {
+        extract_revisions: false,
+        visual_diff: false,
+        objects_dump: false,
+        extract_embedded: false,
+        isolation: rv_pdfauth_core::analyzer::Isolation::Subprocess {
+            exe: PathBuf::from(env!("CARGO_BIN_EXE_rv-pdfauth")),
+        },
+        ..Default::default()
+    }
+}
+
+/// Two clean sample PDFs (no finding above info), so exit codes only reflect the case checks.
+fn clean_evidence(dir: &Path) -> PathBuf {
+    let ev = dir.join("evidence");
+    std::fs::create_dir_all(&ev).unwrap();
+    std::fs::copy(sample().join("original.pdf"), ev.join("a-original.pdf")).unwrap();
+    std::fs::copy(
+        sample().join("original.pdf"),
+        ev.join("b-original-copy.pdf"),
+    )
+    .unwrap();
+    ev
+}
+
+/// The run folder printed on the "logs:" line of the summary.
+fn run_folder(stdout: &[u8]) -> PathBuf {
+    let text = String::from_utf8_lossy(stdout);
+    let logs = text
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("logs:"))
+        .expect("logs line")
+        .trim();
+    PathBuf::from(logs).parent().unwrap().to_path_buf()
+}
+
+#[test]
+fn case_folder_analysis_verify_case_and_tampering() {
+    assert_eq!(
+        CASE_ROLE,
+        CaseRole::Analysis,
+        "rv-pdfauth is an analysis tool"
+    );
+    let tmp = tempfile::tempdir().unwrap();
+    let case = tmp.path().join("CASE-1");
+    let ev = clean_evidence(tmp.path());
+    seed_registry(&case, "CASE-1", &ev);
+    let out = case_analyze(&case)
+        .args(["-i"])
+        .arg(&ev)
+        .args([
+            "--case",
+            "CASE-1",
+            "--hash",
+            "sha256,md5",
+            "--jurisdiction",
+            "co",
+        ])
+        .assert()
+        .code(0)
+        .stdout(predicate::str::contains(
+            "case:   CASE-1 (analysis) verified 2, mismatched 0, not in registry 0",
+        ))
+        .get_output()
+        .stdout
+        .clone();
+    assert!(!case.join("case-log.lock").exists(), "lock released");
+    let run_dir = run_folder(&out);
+    assert!(run_dir.starts_with(case.join("runs").join(TOOL)));
+    assert!(
+        run_dir.join("logs/audit.jsonl").is_file()
+            && run_dir.join("reports/statistics.en.html").is_file()
+    );
+    // The case's jurisdiction (fr, set at creation) overrides --jurisdiction co for the custody form.
+    let item = only_dir(&run_dir.join("reports/items"));
+    let custody = std::fs::read_to_string(item.join("custody.fr.html")).unwrap();
+    assert!(custody.contains("E000") && custody.contains("CASE-1"));
+    bin()
+        .arg("verify-case")
+        .arg(&case)
+        .assert()
+        .code(0)
+        .stdout(predicate::str::contains(
+            "2 registered items, 2 runs verified",
+        ));
+    // The case id may be left out once the case exists; no input = every registered item.
+    case_analyze(&case)
+        .assert()
+        .code(0)
+        .stdout(predicate::str::contains("items: 2").and(predicate::str::contains("verified 2")));
+    case_analyze(&case)
+        .args(["--evidence", "e2"])
+        .assert()
+        .code(0)
+        .stdout(predicate::str::contains("items: 1").and(predicate::str::contains("verified 1")));
+    bin().arg("verify-case").arg(&case).assert().code(0);
+
+    // Usage errors: another case's folder, unknown or malformed id, --evidence without --case-dir,
+    // creation without --case, a case.json of another schema.
+    case_analyze(&case)
+        .args(["--case", "OTHER"])
+        .assert()
+        .code(2);
+    case_analyze(&case)
+        .args(["--evidence", "E0099"])
+        .assert()
+        .code(2);
+    case_analyze(&case)
+        .args(["--evidence", "7"])
+        .assert()
+        .code(2);
+    bin()
+        .args(["analyze", "--evidence", "E0001"])
+        .assert()
+        .code(2);
+    case_analyze(&tmp.path().join("NEW"))
+        .arg("-i")
+        .arg(&ev)
+        .assert()
+        .code(2);
+    let odd = tmp.path().join("ODD");
+    std::fs::create_dir_all(&odd).unwrap();
+    std::fs::write(odd.join("case.json"), r#"{"schema":"other/9"}"#).unwrap();
+    case_analyze(&odd).arg("-i").arg(&ev).assert().code(2);
+    bin().arg("verify-case").arg(tmp.path()).assert().code(1);
+
+    // A tampered case log: verify-case exit 3, and the tool does not extend the case.
+    let log = case.join("case-log.jsonl");
+    let original = std::fs::read_to_string(&log).unwrap();
+    std::fs::write(&log, original.replacen("CASE-1", "CASE-X", 1)).unwrap();
+    bin()
+        .arg("verify-case")
+        .arg(&case)
+        .assert()
+        .code(3)
+        .stdout(predicate::str::contains("BROKEN"));
+    let runs = |c: &Path| {
+        std::fs::read_dir(c.join("runs").join(TOOL))
+            .unwrap()
+            .count()
+    };
+    let before = runs(&case);
+    case_analyze(&case).arg("-i").arg(&ev).assert().code(3);
+    assert_eq!(runs(&case), before, "no run folder in a broken case");
+    std::fs::write(&log, &original).unwrap();
+    // A tampered registry: detected through the digest recorded in the case log.
+    let reg = case.join("evidence/registry.json");
+    let text = std::fs::read_to_string(&reg).unwrap();
+    std::fs::write(&reg, text.replacen("\"size\": ", "\"size\": 1", 1)).unwrap();
+    bin()
+        .arg("verify-case")
+        .arg(&case)
+        .assert()
+        .code(3)
+        .stdout(predicate::str::contains("registry.json"));
 }

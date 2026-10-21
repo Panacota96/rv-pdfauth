@@ -63,49 +63,48 @@ flowchart LR
     P --> O["runs/rv-pdfauth/RUN-ID/"]
 ```
 
-> **Case-folder support in rv-pdfauth arrives with `--case-dir` in the next change.** The commands below show
-> how it will be used; until then, use the [interim procedure](#interim-procedure-until---case-dir-exists).
-> Check `rv-hashinv scan --help` for the intake side.
+The intake side is rv-hashinv (`rv-hashinv scan --help`); rv-pdfauth is the **analysis** tool: it reads the
+registry and never writes it. Full reference: [case-folder.md](case-folder.md).
 
 ```powershell
 # 1. Intake: creates case.json, the registry and the case log
 rv-hashinv scan --case-dir D:\cases\CASE-2026-014 --case CASE-2026-014 --jurisdiction co `
     -i E:\export -r --hash sha256,md5 --actor "Ana Ruiz"
 
-# 2. Analysis of every registered item (or only some: --evidence E0001,E0007)
+# 2. Analysis of every registered item (no --input needed) ...
 rv-pdfauth analyze --case-dir D:\cases\CASE-2026-014 --actor "Ana Ruiz" --sign-cert C:\certs\ana-ruiz.p12
+#    ... or only some registered items
+rv-pdfauth analyze --case-dir D:\cases\CASE-2026-014 --evidence E0001,E0007 --actor "Ana Ruiz"
 
 # 3. Whole-case check: case log, registry digest, each run's chain and its head recorded in the case log
 rv-pdfauth verify-case D:\cases\CASE-2026-014
 ```
 
-What `--case-dir` will do (from the case-folder contract): refuse a broken case log (exit 3); take every
-registered item by default; make sure at least one selected hash algorithm is in the registry (added and logged
-as `case_algorithm_added` if needed, still at most two); after hashing each item, log
-`evidence_verified_against_case` or raise `EVIDENCE_HASH_MISMATCH_WITH_CASE` (high; the analysis still runs) or
-`EVIDENCE_NOT_IN_CASE_REGISTRY` (medium); start its audit log with `case_linked` (case log head, registry
-SHA-256); write into `runs\rv-pdfauth\<RUN-ID>\`; show the evidence id in the reports and the intake date on the
-custody form; append `run_finished` to the case log.
+What `analyze --case-dir` does:
 
-#### Interim procedure until `--case-dir` exists
+- refuses a case folder whose case log, `case.json` or registry digest does not verify (exit 3, nothing written),
+  a folder of another case (`--case` must match `case.json` or be left out; exit 2) and unknown evidence ids
+  (exit 2);
+- takes every registered item by default (or the `--evidence` ids, or the `--input` paths, matched against the
+  registry by id, else path, else content);
+- makes sure at least one selected hash algorithm is in the registry (SHA-256 is added and logged as
+  `case_algorithm_added` if needed, still at most two);
+- right after hashing each item, **before** the PDF analysis, logs `evidence_verified_against_case` or raises
+  `EVIDENCE_HASH_MISMATCH_WITH_CASE` (high, exit 3; the analysis still runs) or `EVIDENCE_NOT_IN_CASE_REGISTRY`
+  (medium);
+- starts its audit log with `run_started`, `case_linked` (case-log head, registry SHA-256) and writes into
+  `runs\rv-pdfauth\<RUN-ID>\logs\` and `reports\` (`--out` is not used);
+- shows the evidence id in every report, the intake date and the case's jurisdiction on the custody form, and a
+  "Case folder" section with the counts in the statistics report;
+- appends `run_finished` (final audit head, totals, verification counts) to the case log, also after a cancel or
+  a failure.
 
-Run rv-pdfauth with its output inside the case folder, then compare its hash register with the intake registry:
+The summary printed at the end has one more line, e.g.
+`case:   CASE-2026-014 (analysis) verified 41, mismatched 0, not in registry 0`. In the desktop app, fill **Case
+folder** in section 1: the output folder is derived and locked, and the results table, result panel and revision
+viewer header show each item's evidence id and registry check.
 
-```powershell
-$case = "D:\cases\CASE-2026-014"
-rv-pdfauth analyze -i E:\export -r --hash sha256,md5 --case CASE-2026-014 --actor "Ana Ruiz" `
-    --out "$case\runs\rv-pdfauth"            # creates logs\<RUN-ID>\ and reports\<RUN-ID>\ there
-
-$reg = Import-Csv "$case\evidence\registry.csv"
-$log = Get-ChildItem "$case\runs\rv-pdfauth\logs" | Sort-Object Name | Select-Object -Last 1
-foreach ($row in Import-Csv "$($log.FullName)\hashes.csv") {
-    $m = $reg | Where-Object { $_.sha256 -eq $row.sha256 } | Select-Object -First 1
-    if ($m) { "{0,5}  {1}  = {2}" -f $row.index, $row.path, $m.evidence_id }
-    else    { "{0,5}  {1}  NOT IN REGISTRY (or changed since intake)" -f $row.index, $row.path }
-}
-```
-
-Keep the output with the case file: it is the continuity proof that `--case-dir` will later log automatically.
+On Windows, registry paths are compared without regard to upper/lower case (the file system is case-insensitive).
 
 ### 2.2 Running `analyze` from the command line
 

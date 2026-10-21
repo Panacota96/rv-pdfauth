@@ -226,8 +226,7 @@ fn check_cms_inner(cms: &[u8], signed: &[&[u8]], out: &mut CmsCheck) -> Option<(
         return Some(());
     };
     let content_digest = digest(h, signed);
-    let to_verify: Vec<u8>;
-    match signed_attrs {
+    let to_verify: Vec<u8> = match signed_attrs {
         Some(sa) => {
             let mut md: Option<&[u8]> = None;
             for attr in children(sa.content) {
@@ -248,14 +247,14 @@ fn check_cms_inner(cms: &[u8], signed: &[&[u8]], out: &mut CmsCheck) -> Option<(
             if let Some(first) = v.first_mut() {
                 *first = 0x31;
             }
-            to_verify = v;
+            v
         }
         None => {
             // No signed attributes: the signature is directly over the content digest.
             out.digest_ok = None;
-            to_verify = Vec::new();
+            Vec::new()
         }
-    }
+    };
     let rsa_hash = match sig_alg {
         OID_RSA => Some(h),
         OID_RSA_SHA256 => Some(Hash::S256),

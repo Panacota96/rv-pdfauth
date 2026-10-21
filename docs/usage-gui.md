@@ -72,6 +72,11 @@ data and findings the engine returned, and the diff pictures in `reports/<run>/i
 When the visual diff did not run (PDFium missing, option off), the viewer still shows the timeline and the
 findings and says why there is no picture.
 
+The viewer shows the run just completed in this window (it uses the results the engine returned, and the digests
+recorded for each picture during that run). An older run cannot be reopened in the viewer: open its `visual/`
+PNGs and `technical.*` report instead, and check their digests as described in
+[usage.md](usage.md#8-verifying-a-run). How to read each finding: [usage.md](usage.md#5-interpreting-each-finding).
+
 ### Why viewing is not logged
 
 The audit log of a run is **closed** when the run finishes: its last entry is `run_finished`, its head may be

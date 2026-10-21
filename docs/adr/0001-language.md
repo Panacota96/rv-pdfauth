@@ -75,3 +75,15 @@ Profile A (Rust workspace: core + clap CLI + egui GUI).
   DocMDP permissions, revisions added after signing. Trust chain and revocation are reported as **not proven**.
   Results are cross-checked in CI against pyhanko and poppler `pdfsig` (test-only oracles).
 - **Fuzzing:** `cargo-fuzz` on the tokenizer and xref reader with a corpus of tampered PDFs; run in CI nightly.
+
+## Implementation status notes (2026-10-21, documentation review)
+
+The decision stands. While documenting the code, these agreed consequences were found **not yet implemented as
+written**; they are tracked as gaps in [admissibility.md](../admissibility.md#consolidated-gap-list):
+
+| Agreed above | State of the code at this date | Gap |
+| --- | --- | --- |
+| Worker in a Job Object with "no network" | Memory cap, kill-on-close and timeout are enforced; network is not restricted by the OS (the worker has no network code) | G23 |
+| Signature results cross-checked in CI against pyHanko and poppler `pdfsig` | `tests/oracle_pdf.py` (pikepdf/qpdf, pyHanko) exists and is run manually; not in CI; no `pdfsig` comparison | G21 |
+| `cargo-fuzz` run in CI nightly | `fuzz/fuzz_targets/analyze.rs` exists; no scheduled workflow | G21 |
+| PDFium "digest in `environment.json`" | The library path, SHA-256 and pinned tag are recorded per PDF in the `item_analyzed` audit entry (`details.analysis.visual.renderer`), not in `environment.json` | — (documented) |

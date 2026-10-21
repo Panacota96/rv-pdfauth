@@ -33,7 +33,14 @@ flowchart TB
 | --- | --- | --- |
 | `input.rs` | Files, folders, list files → sorted, de-duplicated, absolute paths. Symlinks not followed. | No |
 | `hash.rs` | One read loop (1 MiB chunks) feeding 1–2 digests; known-answer self-test. | No |
-| `analyzer.rs` | Signature detection and per-item findings. | **Yes — this is the domain logic** |
+| `analyzer.rs` | Dispatch: PDF candidates to the PDF analysis (worker), other files to signature detection and inventory findings. | **Yes — this is the domain logic** |
+| `pdfscan.rs` | In-process PDF analysis of one item: read-only memory map, `rv_pdfauth_pdf::analyze`, derived outputs (revisions, `objects.json`, `embedded/`). | PDF-specific |
+| `worker.rs` | Child-process isolation (`<exe> worker`), limits, reply protocol `rv-pdfauth-worker/1`, `PARSER_FAILED`. | Reusable for heavy analyzers |
+| `visual.rs` | Visual diff of consecutive revisions with PDFium (`src/render`). | PDF-specific |
+| `fingerprints.rs` | Starter, local and extra producer databases and their identity for the audit trail. | PDF-specific |
+| `trust.rs` | RFC 3161 timestamp of the chain head; CMS signing of PDF reports. | No |
+| `src/pdf` (crate) | PDF parser and findings: scan, revisions, xref, metadata, fonts, content, signatures, DocMDP. `#![forbid(unsafe_code)]`, writes nothing. | PDF-specific |
+| `src/render` (crate) | PDFium binding (run-time load), pixel diff, side-by-side PNG. | PDF-specific |
 | `audit.rs` | Append-only hash-chained `audit.jsonl` + `audit.log`; `verify`. | No |
 | `report/` | View models → minijinja HTML, built-in PDF writer, schema-versioned JSON. | Adapt wording/fields |
 | `events.rs` | Typed events; ETA computation. | No |
@@ -60,12 +67,14 @@ sequenceDiagram
         R->>FS: open read-only, read 1 MiB chunks
         R-->>UI: Progress{elapsed_ms, eta_ms} (≤ every 150 ms)
         R->>A: item_hashed{digests, mtime_unchanged}
+        R->>A: analysis_started, output_written (one per derived file, PDFs via the worker)
         R->>A: item_analyzed{findings, status}
         R-->>UI: ItemFinished
     end
     R->>A: duplicate_group(s), hash_register_written
     R->>O: per-item technical + summary (JSON/HTML/PDF)
     R->>A: item_reports_written{file digests}
+    R->>A: timestamp_obtained or timestamp_pending (RFC 3161 of the chain head)
     R->>O: statistics (JSON/HTML/PDF)
     R->>A: statistics_report_written, run_finished
     R-->>UI: RunFinished
@@ -118,8 +127,9 @@ run.rs ──► analyzer::analyze_item ── not a PDF ──► inventory ana
   `embedded/NN-<name>.<jpg|bin>` (+ `.inflated.*` for FlateDecode), `visual/rev-NN-vs-MM-page-PPP.png`.
 - **Visual diff** (`src/render`): consecutive revisions, pages present in both up to `max_pages`, rendered by
   PDFium on the CPU at `dpi` (lowered for pages above 40 Mpx). A pixel changes when a channel differs by more
-  than 32/255 (anti-aliasing and colour rounding); changes are grouped on an 8 px grid, regions closer than
-  12 px merged, regions under 3 px dropped as noise, boxes padded by 4 px (max 100 per page). Changed pages give
+  than 32/255 (anti-aliasing and colour rounding); changes are grouped on an 8 px grid, cells up to 2 cells
+  apart (1 + ⌊12 px merge gap / 8⌋) are joined into one region, regions with fewer than 3 changed pixels are dropped
+  as noise, boxes are padded by 4 px and merged while they touch (max 100 per page, largest kept). Changed pages give
   a side-by-side PNG (boxes in violet on both halves) and `VISUAL_CHANGE_BETWEEN_REVISIONS` (medium); added or
   removed pages are listed. Ratios are integer ppm or decimal strings — no floats in audited JSON.
 - **Audit**: `item_analyzed.details.analysis` records the fingerprint DBs used (role, name, version, SHA-256),
@@ -128,3 +138,13 @@ run.rs ──► analyzer::analyze_item ── not a PDF ──► inventory ana
 ## Why Rust
 
 See [ADR 0001](adr/0001-language.md).
+
+## Further reading
+
+| Page | Covers |
+| --- | --- |
+| [theory.md](theory.md) | The theory and exact algorithms behind every step above (two levels: plain language and expert) |
+| [admissibility.md](admissibility.md) | How each control supports legal requirements; gaps and examiner checklist |
+| [installation.md](installation.md) | Release verification, PDFium check, building from source |
+| [usage.md](usage.md) | End-to-end use, outputs, interpreting findings, verifying a run |
+| [forensic-audit.md](forensic-audit.md) | Audit log files, actions, timestamp, signed reports |

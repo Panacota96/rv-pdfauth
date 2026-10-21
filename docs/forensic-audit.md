@@ -53,7 +53,7 @@ sequenceDiagram
     participant L as audit.jsonl
     participant A as TSA (RFC 3161)
     T->>L: … item_reports_written (entry #N)
-    T->>A: SHA-256 of entry #N hash + nonce
+    T->>A: entry #N hash as message imprint (SHA-256) + nonce
     alt reachable
         A-->>T: signed token (genTime)
         T->>L: timestamp_obtained (covers_seq N, gen_time, tsa, token_sha256)
@@ -67,7 +67,9 @@ sequenceDiagram
 - The token is stored next to the log: `timestamp-<N>.tsr` (DER) and `timestamp-<N>.json` (readable summary).
 - Offline or air-gapped: the run still completes. When the network is back, `rv-pdfauth timestamp <log folder>`
   re-verifies the chain and appends `timestamp_obtained` — earlier entries are never rewritten.
-- `verify-log` checks each token: imprint = stored head, and entry `#N` still has that hash.
+- `verify-log` checks each token: its file digest, the TSA status, imprint = stored head, and entry `#N` still has
+  that hash. It does **not** verify the TSA's signature or certificate chain: do that with OpenSSL
+  ([usage.md](usage.md#6-timestamps)) before relying on the time in court.
 - Independent check: `openssl ts -verify -digest <head> -in timestamp-<N>.tsr -CAfile <TSA chain>`.
 - `--no-timestamp` (or `RV_NO_TIMESTAMP=1`) disables it; tests use a local TSA (`tests/fake_tsa.py`).
 - **Limitation:** a timestamp proves the log existed at that time, not that its content is true.
@@ -100,11 +102,15 @@ physical transfers. This is a working aid, not legal advice: check it against th
 | `item_started` | each item | index, size, modified time |
 | `item_hashed` | each item | digests, bytes read, `mtime_unchanged` |
 | `item_error` | unreadable item | error message |
-| `item_analyzed` | each item | detected type, extension, findings, status |
+| `analysis_started` | each item | isolation (`worker_process` or `in_process`) |
+| `output_written` / `output_missing` | each derived file | kind, path under `items/`, size, digests (revisions, visual diffs, objects dump, embedded files) |
+| `item_analyzed` | each item | detected type, extension, findings, status; `analysis`: fingerprint databases (name, version, SHA-256), PDFium library (path, SHA-256, pinned tag), worker outcome, visual-diff status |
 | `item_cancelled` / `run_cancelled` | on cancel | processed count |
 | `duplicate_group` | after the loop | hash, item indexes |
 | `hash_register_written` | | digests of `hashes.csv` |
-| `item_reports_written` | each item | digests of every report file |
+| `item_reports_written` / `item_reports_skipped` | each item | digests of every report file / skipped with `--item-reports flagged` |
+| `signing_certificate_loaded` | with `--sign-cert` | certificate subject and SHA-256 (never the password) |
+| `timestamp_obtained` / `timestamp_pending` | before the statistics report | covered entry, head, TSA, genTime, token SHA-256 / reason |
 | `statistics_report_written` | | digests of statistics files |
 | `run_finished` / `run_failed` | last | totals, severities, elapsed |
 
@@ -128,13 +134,17 @@ flowchart LR
 
 | 27037 principle / activity | How RV PDFAuth supports it |
 | --- | --- |
-| Auditability (5.3.3) | Every action logged with actor, UTC time and chain hash |
+| Auditability (5.3.2) | Every action logged with actor, UTC time and chain hash |
 | Repeatability (5.3.3) | `environment.json` records exact tool and dependency versions; same input → same hashes |
-| Reproducibility | Independent verifier (`tests/verify_chain.py`) and standard algorithms |
-| Justifiability | Every finding states what it shows and what it does **not** prove; limitations in every report |
-| Preservation (7.1.4) | Read-only access; hashes of every file and of every report produced |
+| Reproducibility (5.3.4) | Independent verifier (`tests/verify_chain.py`) and standard algorithms |
+| Justifiability (5.3.5) | Every finding states what it shows and what it does **not** prove; limitations in every report |
+| Preservation (spoliation and tampering, 3.19 and 3.21) | Read-only access; hashes of every file and of every report produced |
 | Documentation / chain of custody | Hash register, reports, and log folder form the record of the examination |
 
 Colombian practice (Ley 906 de 2004, Manual de cadena de custodia) and French practice (Code de procédure
 pénale, art. 156 ff. for expertise) both expect the examiner to document the method and preserve integrity;
 the log folder plus the reports are that documentation for this step of the examination.
+
+The full requirement-by-requirement mapping (Colombia, France/EU, ISO/IEC 27037/27041/17025, US/UK), with
+verification marks, gaps and an examiner checklist, is in [admissibility.md](admissibility.md). Why the chain and
+the timestamp work: [theory.md](theory.md#b14-the-audit-hash-chain).

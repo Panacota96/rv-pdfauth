@@ -296,7 +296,7 @@ Also compare the visual-diff PNGs (identical with the same PDFium build and DPI)
 | --- | --- |
 | Program (installer) | `%LOCALAPPDATA%\Programs\Rakvor\RV PDFAuth\` (`rv-pdfauth.exe`, `rv-pdfauth-gui.exe`, `pdfium.dll`, `licenses\pdfium\`, `docs\`, `examples\sample\evidence\`, `unins000.exe`) |
 | Program (portable) | the folder you extracted |
-| PATH entry (installer task) | user environment variable `Path` (`HKCU\Environment`) |
+| PATH entry (installer task) | user environment variable `Path` (`HKCU\Environment`); removed by the uninstaller |
 | Run outputs | `--out` (default `.\rakvor-out` **relative to the current folder**): `logs\<RUN-ID>\`, `reports\<RUN-ID>\`. The GUI uses its *Output folder* field |
 | Local fingerprint database | `%LOCALAPPDATA%\Rakvor\rv-pdfauth\fingerprints.local.json` (Linux/macOS: `$XDG_DATA_HOME/rakvor/rv-pdfauth/`, default `~/.local/share/rakvor/rv-pdfauth/`) |
 | Its change log | `fingerprints.audit.jsonl` in the same folder (hash-chained) |
@@ -307,8 +307,11 @@ Also compare the visual-diff PNGs (identical with the same PDFium build and DPI)
 ## 11. Uninstall
 
 - **Installer:** *Settings → Apps → Installed apps → RV PDFAuth → Uninstall*, or run
-  `"%LOCALAPPDATA%\Programs\Rakvor\RV PDFAuth\unins000.exe"`. It removes the installed files and shortcuts.
-  The user **PATH entry is not removed** in this version; remove it with:
+  `"%LOCALAPPDATA%\Programs\Rakvor\RV PDFAuth\unins000.exe"` (silent: add `/VERYSILENT`). It removes the
+  installed files, the shortcuts and the install folder's entry in the user `Path` (`HKCU\Environment`) that the
+  *Add to PATH* task added; other `Path` entries are left untouched (open a new terminal afterwards). CI installs
+  and uninstalls the package on `windows-latest` and fails if the entry is left behind. Builds before this fix did
+  not remove it; if an old entry remains, delete it with:
 
   ```powershell
   $dir = "$env:LOCALAPPDATA\Programs\Rakvor\RV PDFAuth"

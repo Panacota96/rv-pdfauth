@@ -101,7 +101,10 @@ jobs:
       - name: Installer (Inno Setup, preinstalled on windows-latest)
         shell: pwsh
         run: |
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=${{ steps.v.outputs.version }} /DSourceDir=$PWD /O$PWD\dist packaging\windows\installer.iss
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; if ($LASTEXITCODE -ne 0) { exit 1 } }
+          & $iscc /DAppVersion=${{ steps.v.outputs.version }} /DSourceDir=$PWD /O$PWD\dist packaging\windows\installer.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
       - name: Code signing of the installer (runs only when the SIGN_PFX_BASE64 secret exists)
         if: env.SIGN_ENABLED == 'true'
         shell: pwsh

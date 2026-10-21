@@ -74,3 +74,43 @@ begin
   end;
   Result := Pos(';' + Uppercase(Dir) + ';', ';' + Uppercase(Paths) + ';') = 0;
 end;
+
+{ Uninstall: remove every occurrence of the install folder from the user PATH (HKCU\Environment) that the
+  addtopath task added; other entries are kept in their order. ChangesEnvironment=yes makes the uninstaller
+  broadcast the change, so new terminals no longer see the folder. }
+procedure RemoveFromPath(Dir: string);
+var
+  Paths, Padded, Upper, Needle: string;
+  P: Integer;
+begin
+  if not RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', Paths) then
+    exit;
+  Padded := ';' + Paths + ';';
+  Needle := ';' + Uppercase(Dir) + ';';
+  Upper := Uppercase(Padded);
+  P := Pos(Needle, Upper);
+  if P = 0 then
+    exit;
+  while P > 0 do
+  begin
+    { Delete ";<Dir>" and keep the following ';' as the separator. }
+    Delete(Padded, P, Length(Dir) + 1);
+    Upper := Uppercase(Padded);
+    P := Pos(Needle, Upper);
+  end;
+  { Strip the two padding separators (Padded is ';' alone when Dir was the only entry). }
+  if Length(Padded) <= 2 then
+    Paths := ''
+  else
+    Paths := Copy(Padded, 2, Length(Padded) - 2);
+  if Paths = '' then
+    RegDeleteValue(HKEY_CURRENT_USER, 'Environment', 'Path')
+  else
+    RegWriteExpandStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', Paths);
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+    RemoveFromPath(ExpandConstant('{app}'));
+end;

@@ -22,8 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Toolchain pinned in rust-toolchain.toml
+        id: toolchain
+        shell: bash
+        run: echo "channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ steps.toolchain.outputs.channel }}
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
@@ -39,6 +44,22 @@ jobs:
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
           ./actionlint -color
 
+  msrv:
+    # The minimum Rust versions declared in Cargo.toml (rust-version) really build: 1.88 for the CLI and the
+    # core crates (edition 2024 let chains), 1.95 for the GUI (egui 0.37). `cargo +X` overrides rust-toolchain.toml.
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the declared minimum toolchains
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal
+          rustup toolchain install 1.95.0 --profile minimal
+      - name: cargo check with the declared minimums
+        run: |
+          cargo +1.88.0 check --locked -p rv-pdfauth-cli -p rv-pdfauth-core -p rv-pdfauth-pdf -p rv-pdfauth-render
+          cargo +1.95.0 check --locked -p rv-pdfauth-gui
+
   test:
     needs: lint
     strategy:
@@ -48,7 +69,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Toolchain pinned in rust-toolchain.toml
+        id: toolchain
+        shell: bash
+        run: echo "channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.toolchain.outputs.channel }}
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-python@v5
         with:

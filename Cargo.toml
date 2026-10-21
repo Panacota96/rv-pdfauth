@@ -9,7 +9,10 @@ version = "0.1.0"
 edition = "2024"
 license = "LicenseRef-Rakvor-Audit"
 publish = false
-rust-version = "1.85"
+# Minimum supported Rust for the CLI, core, PDF and render crates: 1.88 (edition 2024 `let` chains, stable
+# since 1.88; every non-GUI dependency in Cargo.lock declares <= 1.85). The GUI crate overrides it to 1.95
+# (egui/eframe 0.37). CI checks both minimums (job `msrv`); releases use rust-toolchain.toml (1.97.0).
+rust-version = "1.88"
 authors = ["Rakvor"]
 repository = "https://github.com/Panacota96/rv-pdfauth"
 

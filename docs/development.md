@@ -14,6 +14,15 @@ cargo run -p rv-pdfauth-gui
 Linux needs no system packages to build. On Windows use the MSVC toolchain (`rustup default stable-msvc`);
 binaries are linked with the static C runtime (`.cargo/config.toml`), so they run on a clean Windows 10/11.
 
+### Toolchain
+
+`rust-toolchain.toml` pins the compiler (1.97.0 with rustfmt and clippy); rustup selects it automatically, and
+both workflows read their channel from that file (`dtolnay/rust-toolchain@master` with
+`toolchain: <channel of rust-toolchain.toml>`), so local builds, CI and release binaries use one compiler. Bump it
+deliberately in that one file. The *minimum* versions are separate: `rust-version` is 1.88 for the CLI, core, PDF
+and render crates (edition 2024 `let` chains) and 1.95 for the GUI (egui/eframe 0.37); the CI job `msrv` runs
+`cargo +1.88.0 check` and `cargo +1.95.0 check -p rv-pdfauth-gui` to keep those numbers true.
+
 ### PDFium (visual diff)
 
 The renderer loads PDFium at run time; it is never linked and never committed. Fetch the pinned build (tag and

@@ -229,7 +229,7 @@ enforces it.
 
 | Item | Version |
 | --- | --- |
-| Rust | Install with `rustup`. Minimum **1.88** (edition 2024 with `let` chains; `Cargo.toml` says `rust-version = "1.85"`, which is too low). To match a release, use the exact compiler in that release's `environment.json` → `tool.rustc` (e.g. `rustc 1.97.0 (2d8144b78 2026-07-07)`): `rustup toolchain install 1.97.0 --profile minimal` and build with `cargo +1.97.0 …`. If the source tree contains `rust-toolchain.toml`, rustup selects it automatically. |
+| Rust | Install with `rustup`. Minimum **1.88** for the CLI and the core crates (edition 2024 `let` chains; every non-GUI dependency in `Cargo.lock` declares ≤ 1.85) and **1.95** for the GUI (egui/eframe 0.37) — the `rust-version` values in `Cargo.toml` and `src/gui/Cargo.toml`, checked in CI by the `msrv` job. To match a release, use the exact compiler in that release's `environment.json` → `tool.rustc` (e.g. `rustc 1.97.0 (2d8144b78 2026-07-07)`): `rustup toolchain install 1.97.0 --profile minimal` and build with `cargo +1.97.0 …`. If the source tree contains `rust-toolchain.toml`, rustup selects it automatically. |
 | Windows linker | Visual Studio 2022 Build Tools, workload *Desktop development with C++* (MSVC + Windows SDK); `rustup default stable-msvc`. Static CRT is set in `.cargo/config.toml`. |
 | Linux | No system packages needed to build the CLI. |
 | Optional | Python 3.12 with `blake3 jsonschema pyhanko` for the independent verifiers and trust tests; `pikepdf` for the PDF oracle. |
@@ -268,7 +268,7 @@ Be precise about what can and cannot match bit for bit in this version (gap G22)
 | --- | --- | --- |
 | `pdfium.dll` | Yes (downloaded, not built) | SHA-256 `79d4676b…c118` ([step 6](#6-check-pdfium-visual-diff-renderer)) |
 | `docs/`, `examples/` files | Yes (from git; LF line endings except `*.ps1`, `*.iss`) | `git ls-files` + `Get-FileHash` against the extracted zip |
-| `rv-pdfauth.exe`, `rv-pdfauth-gui.exe` | **Not guaranteed**: the release uses the then-current stable toolchain (`dtolnay/rust-toolchain@stable`), paths are not remapped, and the PE header carries link-time data | Provenance attestation (step 3) binds the released binary to the workflow and commit; then compare behaviour (below) |
+| `rv-pdfauth.exe`, `rv-pdfauth-gui.exe` | **Not guaranteed**: the compiler is pinned (CI and release read `rust-toolchain.toml`, 1.97.0, the same as `environment.json` → `tool.rustc`), but paths are not remapped and the PE header carries link-time data | Provenance attestation (step 3) binds the released binary to the workflow and commit; then compare behaviour (below) |
 | zip, installer | No (archive timestamps) | Attestation (step 3) |
 
 **Functional equivalence** — run the sample with the release binary and with your build, then compare the

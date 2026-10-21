@@ -4,7 +4,8 @@ description = "RV PDFAuth desktop interface (Windows 10/11, also builds on Linux
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-rust-version.workspace = true
+# egui/eframe/epaint 0.37 declare rust-version 1.95 (the rest of the workspace needs 1.88).
+rust-version = "1.95"
 authors.workspace = true
 
 [[bin]]

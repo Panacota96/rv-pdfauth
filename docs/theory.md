@@ -427,10 +427,11 @@ stateDiagram-v2
 - **Hybrid** files (table + `/XRefStm`, ISO 32000-1 §7.5.8.4) are reported as `HYBRID_XREF` because readers that
   ignore `/XRefStm` and readers that use it can see different objects; conflicting entries are warned.
 - **Where the warnings are.** The PDF layer returns them as `PdfReport.warnings` (byte offset + message, at most
-  500, duplicates removed). In this version they are **not** copied into `technical.json` or the HTML/PDF
-  reports (gap G25), although the `XREF_OFFSETS_INCONSISTENT` wording refers to them. To read them, run the PDF
-  layer on the evidence copy from the source tree: `cargo run -p rv-pdfauth-pdf --example dump -- <file.pdf>`
-  (JSON on stdout; uses the bundled fingerprint database only).
+  500, then one "further warnings suppressed" entry; duplicates removed). The core writes the complete list to
+  `warnings.json` in the item folder (kind `parser_warnings`, schema `rakvor.pdf-warnings/1`: `count`,
+  `parser_cap`, `parser_cap_reached`, `warnings[]`), which is hashed and audited (`output_written`) like every
+  output. `technical.json` → `pdf.warnings` holds the count, the first 100 rows and the file name; the technical
+  HTML/PDF report prints the same 100 rows (byte offset, message) and says how many more are in `warnings.json`.
 
 ## B5 Revision extraction (byte-exact prefixes)
 
@@ -739,8 +740,11 @@ size change).
 **Limits.** A change smaller than about one pixel at the chosen DPI (≈ 0.23 mm at 110 DPI) can vanish; colour
 changes of ≤ 32 levels per channel are ignored; pages beyond `--max-pages` are only compared structurally
 (`pages_not_compared`); added or removed pages are listed, not drawn; content not rendered (metadata, invisible
-text) cannot appear. The per-page numbers (boxes, effective DPI, changed pixels) are computed but only the summary
-(`status`, PNG list, pages changed) reaches `technical.json` in this version.
+text) cannot appear. Every per-page measurement (status, changed pixels, `changed_ppm`, `changed_ratio`,
+effective DPI, rendered width × height, page-size change, boxes and the PNG name) is kept in `technical.json` →
+`pdf.visual.pairs[].pages[]`; the technical HTML/PDF report shows them as a *Per-page measurements* table (first
+200 rows, the rest in `technical.json`). A pair or page PDFium could not open or render is listed with its reason
+and adds the item limitation `VISUAL_DIFF_UNAVAILABLE`.
 
 ## B13 Worker isolation
 

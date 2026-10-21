@@ -77,6 +77,17 @@
 </div>
 {% if pdf.visual.images %}<div class="thumbs">{% for i in pdf.visual.images %}<a href="{{ i.href }}"><img src="{{ i.href }}" alt="{{ i.name }}" loading="lazy"><span class="mono">{{ i.name }}</span></a>{% endfor %}</div>
 {% else %}<p>{{ t.visual_none }}</p>{% endif %}
+{% if pdf.visual.limitation %}<p class="note">{{ pdf.visual.limitation }}</p>{% endif %}
+{% if pdf.visual.page_rows %}<h3>{{ t.visual_pages }}</h3>
+<div class="scroll"><table class="dense"><tr><th>{{ t.vp_pair }}</th><th>{{ t.page }}</th><th>{{ t.vp_changed }}</th><th>{{ t.vp_share }}</th><th>{{ t.vp_pixels }}</th><th>{{ t.vp_regions }}</th><th>DPI</th><th>{{ t.vp_size_changed }}</th><th>{{ t.vp_note }}</th></tr>
+{% for p in pdf.visual.page_rows %}<tr><td>{{ p.pair }}</td><td>{{ p.page }}</td><td>{{ p.status }}</td><td>{{ p.share }}</td><td>{{ p.pixels }}</td><td>{{ p.regions }}</td><td>{{ p.dpi }}</td><td>{{ p.size_changed }}</td><td class="mono">{{ p.note }}</td></tr>{% endfor %}
+</table></div>{% if pdf.visual.page_rows_more %}<p class="small">{{ pdf.visual.page_rows_more }}</p>{% endif %}{% endif %}
+
+<h2>{{ t.parser_warnings }}</h2>
+{% if pdf.warnings.rows %}<div class="scroll"><table class="dense"><tr><th>{{ t.warning_offset }}</th><th>{{ t.warning_message }}</th></tr>
+{% for w in pdf.warnings.rows %}<tr><td class="mono">{{ w.offset }}</td><td>{{ w.message }}</td></tr>{% endfor %}
+</table></div>{% if pdf.warnings.more %}<p class="small">{{ pdf.warnings.more }}</p>{% endif %}{% else %}<p>{{ t.none }}</p>{% endif %}
+{% if pdf.warnings.file %}<p class="small">{{ t.warnings_file_note }}</p>{% endif %}
 {% endif %}
 
 {% if extracted %}<h2>{{ t.extracted_files }}</h2>

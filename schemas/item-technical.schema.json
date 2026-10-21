@@ -643,6 +643,195 @@
                 "type": "string",
                 "pattern": "^visual/"
               }
+            },
+            "limitation": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Item-level limitation code (VISUAL_DIFF_UNAVAILABLE) when part or all of the visual comparison is missing."
+            },
+            "pairs": {
+              "description": "Every compared pair of consecutive revisions with its per-page measurements, as computed (ratios are strings, ppm integers).",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from_rev",
+                  "to_rev",
+                  "status"
+                ],
+                "properties": {
+                  "from_rev": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "to_rev": {
+                    "type": "integer",
+                    "minimum": 2
+                  },
+                  "status": {
+                    "enum": [
+                      "done",
+                      "error"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "pages_from": {
+                    "type": "integer"
+                  },
+                  "pages_to": {
+                    "type": "integer"
+                  },
+                  "pages_added": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "pages_removed": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "pages_compared": {
+                    "type": "integer"
+                  },
+                  "pages_beyond_cap": {
+                    "type": "integer"
+                  },
+                  "pages_changed": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "changed_ratio_max": {
+                    "type": "string"
+                  },
+                  "pages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "page",
+                        "status"
+                      ],
+                      "properties": {
+                        "page": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "status": {
+                          "enum": [
+                            "compared",
+                            "error"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string"
+                        },
+                        "changed": {
+                          "type": "boolean"
+                        },
+                        "changed_ratio": {
+                          "type": "string"
+                        },
+                        "changed_ppm": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "changed_pixels": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "dpi": {
+                          "type": "integer"
+                        },
+                        "width": {
+                          "type": "integer"
+                        },
+                        "height": {
+                          "type": "integer"
+                        },
+                        "size_changed": {
+                          "type": "boolean"
+                        },
+                        "boxes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "x",
+                              "y",
+                              "w",
+                              "h"
+                            ]
+                          }
+                        },
+                        "boxes_truncated": {
+                          "type": "boolean"
+                        },
+                        "png": {
+                          "type": "string",
+                          "pattern": "^visual/"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "warnings": {
+          "description": "Parser warnings (byte offset + message): count, the first 100, and the item-folder file with the complete list (warnings.json, hashed and audited).",
+          "type": "object",
+          "required": [
+            "count",
+            "shown",
+            "truncated",
+            "file"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "shown": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "object",
+                "required": [
+                  "offset",
+                  "message"
+                ],
+                "properties": {
+                  "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "parser_cap_reached": {
+              "type": "boolean"
+            },
+            "file": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         }

@@ -969,6 +969,60 @@ fn pdf_blocks(ctx: &Value) -> Vec<Block> {
                 b.push(Block::Bullet(s(i, "href")));
             }
         }
+        if !s(pv, "visual.limitation").is_empty() {
+            b.push(Block::Note(s(pv, "visual.limitation")));
+        }
+        let pages = arr(&pv["visual"], "page_rows");
+        if !pages.is_empty() {
+            b.push(Block::Heading(t("visual_pages")));
+            b.push(table(
+                vec![
+                    t("vp_pair"),
+                    t("page"),
+                    t("vp_changed"),
+                    t("vp_share"),
+                    t("vp_pixels"),
+                    t("vp_regions"),
+                    "DPI".into(),
+                    t("vp_size_changed"),
+                    t("vp_note"),
+                ],
+                &[9.0, 5.0, 8.0, 10.0, 9.0, 7.0, 5.0, 8.0, 23.0],
+                pages,
+                &[
+                    "pair",
+                    "page",
+                    "status",
+                    "share",
+                    "pixels",
+                    "regions",
+                    "dpi",
+                    "size_changed",
+                    "note",
+                ],
+            ));
+            if !s(pv, "visual.page_rows_more").is_empty() {
+                b.push(Block::Para(s(pv, "visual.page_rows_more")));
+            }
+        }
+        b.push(Block::Heading(t("parser_warnings")));
+        let warns = arr(&pv["warnings"], "rows");
+        if warns.is_empty() {
+            b.push(Block::Para(t("none")));
+        } else {
+            b.push(table(
+                vec![t("warning_offset"), t("warning_message")],
+                &[12.0, 72.0],
+                warns,
+                &["offset", "message"],
+            ));
+            if !s(pv, "warnings.more").is_empty() {
+                b.push(Block::Para(s(pv, "warnings.more")));
+            }
+        }
+        if !s(pv, "warnings.file").is_empty() {
+            b.push(Block::Para(t("warnings_file_note")));
+        }
     }
     let ex = arr(ctx, "extracted");
     if !ex.is_empty() {

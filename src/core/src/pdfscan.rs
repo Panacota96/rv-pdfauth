@@ -10,6 +10,9 @@ use std::path::Path;
 
 /// Inflated embedded streams larger than this are not written (decompression bombs).
 pub const MAX_INFLATED_BYTES: u64 = 256 * 1024 * 1024;
+/// Every parser warning (byte offset + message) of an analysed PDF, written in the item folder.
+pub const WARNINGS_FILE: &str = "warnings.json";
+pub const WARNINGS_SCHEMA: &str = "rakvor.pdf-warnings/1";
 /// At most this many embedded streams are written per item; the rest are listed as skipped.
 pub const MAX_EMBEDDED_OUTPUTS: usize = 1000;
 
@@ -232,6 +235,22 @@ pub fn analyze_pdf(ctx: &AnalyzeCtx) -> Analysis {
         outputs: vec![],
         errors: vec![],
     };
+
+    // Parser warnings with their byte offsets (the XREF_OFFSETS_INCONSISTENT and HYBRID_XREF wording refers to
+    // them): the full list goes to warnings.json, hashed and audited like every output; the reports show the
+    // first rows and point at that file.
+    let warnings_doc = json!({
+        "schema": WARNINGS_SCHEMA,
+        "count": report.warnings.len(),
+        "parser_cap": rv_pdfauth_pdf::doc::MAX_WARNINGS,
+        "parser_cap_reached": report.warnings.len() > rv_pdfauth_pdf::doc::MAX_WARNINGS,
+        "warnings": report.warnings,
+    });
+    w.write(
+        WARNINGS_FILE,
+        "parser_warnings",
+        &serde_json::to_vec_pretty(&warnings_doc).unwrap_or_default(),
+    );
 
     // Revisions: exact byte prefixes of the evidence, so each one's digest can be re-derived by anyone.
     let nrev = report.revisions.len();
@@ -561,8 +580,11 @@ mod tests {
             ..DomainOptions::default()
         };
         let a = run(&fixture("two-revisions.pdf"), dir.path(), &opts);
-        assert!(a.outputs.is_empty(), "{:?}", a.outputs);
-        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+        // Only the parser warnings (no evidence content) are always written.
+        let rels: Vec<&str> = a.outputs.iter().map(|o| o.rel_path.as_str()).collect();
+        assert_eq!(rels, [WARNINGS_FILE], "{:?}", a.outputs);
+        assert_eq!(a.outputs[0].kind, "parser_warnings");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
         assert_eq!(a.details["visual"]["status"], "not_applicable");
     }
 

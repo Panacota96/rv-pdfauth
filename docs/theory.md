@@ -779,9 +779,20 @@ stateDiagram-v2
 Other `PARSER_FAILED` reasons: `spawn_failed`, `isolation_failed` (Job Object could not be created/assigned),
 `unreadable` (memory map failed), `panic` (in-process parser panic; the parser is designed never to panic).
 Files left by a failed worker are kept, hashed and audited as `partial_output`; they support no finding. The child
-never writes the audit log. The worker is **not** network-isolated by the operating system (no firewall rule or
-job network limit); it simply has no network code. Fault injection (`RV_WORKER_TEST_FAULT=crash|hang|oom`) exists
-in debug builds only.
+never writes the audit log.
+
+**Network.** The worker code path has no network code: no HTTP client or socket is used by the worker, the
+analyzer, the PDF layer or the renderer (the timestamp client lives in `trust.rs`, used by the parent only; a test,
+`worker_code_path_has_no_network_code`, checks the sources and the crate manifests). On **Linux** the worker is
+also started in an empty network namespace (`unshare(CLONE_NEWNET)` in `pre_exec`, or with `CLONE_NEWUSER` where
+unprivileged user namespaces are allowed): it then has no usable network interface at all. If the kernel refuses
+both, the analysis still runs and the fallback is recorded. The parent compares the child's `/proc/<pid>/ns/net`
+with its own and writes `worker.network = {isolated, method, detail}` into the `item_analyzed` audit entry
+(`method: "linux_netns"` or `"none"`). On **Windows** a Job Object cannot block network access, so there is no
+OS-level network block for the worker (`isolated: false`, `method: "none"` is recorded); the guarantee there is
+the absence of network code, plus a firewall rule if the examiner adds one. Fault injection
+(`RV_WORKER_TEST_FAULT=crash|hang|oom`, and `RV_WORKER_TEST_NO_NETNS=1` for the namespace fallback) exists in debug
+builds only.
 
 ## B14 The audit hash chain
 

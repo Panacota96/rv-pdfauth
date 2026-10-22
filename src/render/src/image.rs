@@ -249,10 +249,10 @@ pub fn diff(a: &RgbImage, b: &RgbImage, p: &DiffParams) -> DiffResult {
                 }
             }
         }
-        if let Some(b) = bx {
-            if pixels >= p.min_pixels as u64 {
-                regions.push((b, pixels));
-            }
+        if let Some(b) = bx
+            && pixels >= p.min_pixels as u64
+        {
+            regions.push((b, pixels));
         }
     }
     let changed_pixels = regions.iter().map(|r| r.1).sum();

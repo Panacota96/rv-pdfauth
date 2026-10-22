@@ -456,10 +456,10 @@ impl GuiState {
         if !self.sign_cert.is_empty() && !std::path::Path::new(&self.sign_cert).is_file() {
             return Err(format!("Signing certificate not found: {}", self.sign_cert));
         }
-        if let Some(db) = &self.options.fingerprints_db {
-            if !db.is_file() {
-                return Err(format!("Fingerprint database not found: {}", db.display()));
-            }
+        if let Some(db) = &self.options.fingerprints_db
+            && !db.is_file()
+        {
+            return Err(format!("Fingerprint database not found: {}", db.display()));
         }
         let mut preamble = self.ui_actions.clone();
         preamble.push(("ui_start_clicked".into(), json!({"algorithms": self.selected, "lang": self.lang, "recursive": self.recursive,

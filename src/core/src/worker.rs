@@ -288,14 +288,14 @@ fn files_under(dir: &Path) -> Vec<String> {
             };
             if md.is_dir() {
                 walk(base, &p, out);
-            } else if md.is_file() {
-                if let Ok(rel) = p.strip_prefix(base) {
-                    let parts: Vec<String> = rel
-                        .components()
-                        .map(|c| c.as_os_str().to_string_lossy().into_owned())
-                        .collect();
-                    out.push(parts.join("/"));
-                }
+            } else if md.is_file()
+                && let Ok(rel) = p.strip_prefix(base)
+            {
+                let parts: Vec<String> = rel
+                    .components()
+                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                    .collect();
+                out.push(parts.join("/"));
             }
         }
     }

@@ -464,7 +464,9 @@ fit for purpose and validated before implementation.
 
 ## Consolidated gap list
 
-G1–G17 come from the research note; G18–G26 were found while documenting the code of this commit.
+G1–G17 come from the research note; G18–G26 were found while documenting the code. A maintenance pass closed
+G18 (TSA signature and chain; revocation remains), G20, G21 (except a `pdfsig` oracle) and G25 in code or CI, and
+narrowed G9, G22, G23 and G26; each row states what remains.
 Owners: **Eng.** = engineering (tool), **Counsel**, **Examiner**, **Firm** = Rakvor management.
 
 | ID | Gap | Affected | Mitigation now | Remedy | Owner |

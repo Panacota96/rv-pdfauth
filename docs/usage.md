@@ -240,8 +240,18 @@ digest and item-report digest recorded before it ([theory.md B15](theory.md#b15-
 | `--no-timestamp` / `RV_NO_TIMESTAMP=1` / GUI unticked | No request | Use `rv-pdfauth timestamp` later if needed |
 | Broken chain | `rv-pdfauth timestamp` refuses (exit 3): no timestamp is added to a broken log | Investigate; do not repair |
 
-`rv-pdfauth verify-log` checks the token's digest and that it covers the logged head, **not** the TSA's signature
-and certificate (gap G18). Do that with OpenSSL (Git for Windows ships `openssl.exe`):
+`rv-pdfauth verify-log` checks the token's digest, that it covers the logged head, and the TSA's CMS signature
+(signer certificate in the token, ESS binding, message digest, RSA signature, timeStamping key usage). Give it the
+TSA's CA bundle to validate the certificate chain as well:
+
+```powershell
+rv-pdfauth verify-log <OUT>\logs\<RUN-ID> --tsa-ca C:\certs\tsa-roots.pem
+#     timestamp … covers entry #60: TSA signature valid (signer: …); chain validated to CN=… (revocation not checked)
+```
+
+Without `--tsa-ca` the line ends with *chain not validated*; a token whose signature or chain fails gives exit 3.
+Revocation, the policy OID and the accuracy are not checked by the tool; check them, and cross-check the result
+with a second tool, with OpenSSL (Git for Windows ships `openssl.exe`):
 
 ```bash
 cd <OUT>/logs/<RUN-ID>
@@ -294,7 +304,7 @@ rv-pdfauth verify-log D:\cases\CASE-2026-014\rv-pdfauth\logs\20261021T103903Z-67
 
 | Step | Command | Proves |
 | --- | --- | --- |
-| 1 | `rv-pdfauth verify-log <log>` (exit 0 intact, 3 broken) | No entry edited, deleted or reordered; timestamp token matches the head it covers |
+| 1 | `rv-pdfauth verify-log <log> [--tsa-ca <bundle>]` (exit 0 intact, 3 broken) | No entry edited, deleted or reordered; timestamp token matches the head it covers and carries a valid TSA signature (and chain, with `--tsa-ca`) |
 | 2 | `python tests/verify_chain.py <log>` (source tree) | Same, with an independent implementation; also re-hashes the evidence listed in `hashes.csv` |
 | 3 | OpenSSL ([Timestamps](#6-timestamps)) | The TSA really signed that head at that time |
 | 4 | Script below | Every report and output file still has the digest recorded in the log |
@@ -396,7 +406,7 @@ The visual diff is *not applicable* (no finding) for single-revision files or wi
 | Command | 0 | 1 | 2 | 3 | 130 |
 | --- | --- | --- | --- | --- | --- |
 | `analyze` | done, no high finding | runtime error (input not found, output not writable, wrong certificate password, missing `--fingerprints-db` file) | usage error (three algorithms, unknown language) | done, ≥ 1 high finding | cancelled (Ctrl+C), partial reports written |
-| `verify-log` | intact | log unreadable | — | broken chain or token mismatch | — |
+| `verify-log` | intact, tokens verify | log or `--tsa-ca` file unreadable | — | broken chain, token mismatch, invalid TSA signature or untrusted chain | — |
 | `timestamp` | obtained and logged | TSA unreachable (nothing changed) | — | broken log (nothing added) | — |
 | `self-test` | all pass | a failure: do not use the build | — | — | — |
 | `fingerprints learn / list / export` | done | file not a PDF / no producer / DB unreadable / output exists | usage error | — | — |

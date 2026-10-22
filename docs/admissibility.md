@@ -334,8 +334,9 @@ for counsel):
   on an EU Trusted List, art. 42); any statutory status in Colombia (Ley 527 art. 30 #5); proof of anything
   before intake; proof of when individual entries were written (only the head is stamped).
 - **Consequence:** Rakvor carries the burden of showing the TSA's reliability: policy OID, clock source,
-  certificate chain and revocation at stamping time. `verify-log` does **not** check these (G18): run the OpenSSL
-  check in the [checklist](#examiner-checklist-before-filing-a-report).
+  certificate chain and revocation at stamping time. `verify-log` checks the TSA signature and, with `--tsa-ca`,
+  the chain; it does **not** check revocation, policy or accuracy (G18): run the OpenSSL check in the
+  [checklist](#examiner-checklist-before-filing-a-report).
 
 | # | Requirement | Source | How rv-pdfauth meets it | Status |
 | --- | --- | --- | --- | --- |
@@ -469,7 +470,7 @@ Owners: **Eng.** = engineering (tool), **Counsel**, **Examiner**, **Firm** = Rak
 | G15 | Scope: no imaging, live, cloud or mobile acquisition | ISO-11 | Declared; use dedicated acquisition tools | — | Examiner |
 | G16 | No ANSSI PRIS qualification (market positioning, not admissibility) | §5.5 | — | Optional roadmap item | Firm |
 | G17 | Source access offered without a defined protocol; `LICENSE` at this commit is Apache-2.0 while the intended model is proprietary, auditable, no redistribution | CO-P17, FR-P11, CO-C5 | Provide the exact tagged source on request | Standard NDA and inspection protocol (escrow or supervised review); align the licence file with the owner's model | Firm + Counsel |
-| G18 | `verify-log` checks the token's imprint, status and file digest, but **not** the TSA signature, certificate chain, policy or accuracy | EU-4, CO-L9 | `openssl ts -verify` against the TSA chain (checklist step 9) | Verify the token signature and chain in `verify-log` | Eng. |
+| G18 | `verify-log` checks the token's imprint, status, file digest and the TSA's CMS signature, and with `--tsa-ca` the certificate chain (closed in code); **not** revocation, policy OID or accuracy | EU-4, CO-L9 | `verify-log --tsa-ca <TSA roots>`, plus `openssl ts -verify` as second tool and for revocation (checklist step 9) | Revocation (OCSP/CRL) and policy checks | Eng. |
 | G19 | No command re-verifies report and output files against the digests in the audit log (only the GUI viewer re-checks diff PNGs) | ISO-1, CO-P2 | Script in [usage.md](usage.md#8-verifying-a-run) | `verify-run` command | Eng. |
 | G20 | The evidence is read twice (hash pass, then memory-mapped by the worker). **Closed in code:** the worker re-hashes the parsed bytes with the primary algorithm and compares (`evidence_rehash` in the audit; `EVIDENCE_CHANGED_DURING_ANALYSIS`, high, on a difference); residual: a change is detected, not prevented | CO-P5, ISO-7 | Analyse a write-protected copy only | — (keep in checklist) | Eng. |
 | G21 | Independent PDF oracles (tests/oracle_pdf.py) and fuzzing are not run in CI, although ADR 0001 says they are | CO-P14, CO-J8, US-8, ISO-3 | Run `python tests/oracle_pdf.py` and keep the output for the validation dossier | Wire both into CI (nightly) | Eng. |
@@ -496,8 +497,9 @@ Owners: **Eng.** = engineering (tool), **Counsel**, **Examiner**, **Firm** = Rak
    `rv-pdfauth verify-log <log folder>` prints `OK`.
 8. **Independent chain check**: `python tests/verify_chain.py <log folder>` exits 0 (it also re-hashes the evidence
    listed in `hashes.csv`).
-9. **Timestamp**: `timestamp_obtained` is present (or obtained later with `rv-pdfauth timestamp`), and the token was
-   verified with OpenSSL against the TSA's certificate chain: `openssl ts -verify -digest <head> -in
+9. **Timestamp**: `timestamp_obtained` is present (or obtained later with `rv-pdfauth timestamp`),
+   `rv-pdfauth verify-log <log folder> --tsa-ca <TSA roots>` reports *chain validated*, and the token was
+   cross-checked with OpenSSL against the TSA's certificate chain: `openssl ts -verify -digest <head> -in
    timestamp-<N>.tsr -CAfile <TSA chain>` ([usage.md](usage.md#6-timestamps)). For proceedings needing a
    presumption, a qualified (EU) or ECD (Colombia) TSA was used.
 10. **Outputs match the log**: report and output files re-hashed against the audited digests

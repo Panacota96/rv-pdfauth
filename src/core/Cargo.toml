@@ -33,7 +33,8 @@ der.workspace = true
 spki.workspace = true
 const-oid.workspace = true
 rsa.workspace = true
-sha2-legacy.workspace = true
+# `oid`: RSA PKCS#1 v1.5 verification of TSA tokens needs the digest OIDs.
+sha2-legacy = { workspace = true, features = ["oid"] }
 rv-pdfauth-pdf.workspace = true
 rv-pdfauth-render.workspace = true
 memmap2.workspace = true

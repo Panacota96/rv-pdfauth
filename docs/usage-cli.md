@@ -53,7 +53,9 @@ Commands:
                 reports
   fingerprints  Manage the local producer/editor fingerprint database (learn, list, export). Offline
                 only
-  verify-log    Verify that an audit log (audit.jsonl) has not been edited, truncated or re-ordered
+  verify-log    Verify that an audit log (audit.jsonl) has not been edited, truncated or re-ordered,
+                and check every RFC 3161 timestamp token of the run (imprint and the TSA's CMS
+                signature)
   self-test     Check every hash algorithm against known-answer test vectors
   timestamp     Add an RFC 3161 timestamp to a finished run (e.g. after working offline)
   verify-case   Verify a whole case folder: case log, evidence registry and every run's audit log
@@ -495,9 +497,10 @@ EXIT CODES:
 ## rv-pdfauth verify-log
 
 ```text
-Verify that an audit log (audit.jsonl) has not been edited, truncated or re-ordered
+Verify that an audit log (audit.jsonl) has not been edited, truncated or re-ordered, and check every
+RFC 3161 timestamp token of the run (imprint and the TSA's CMS signature)
 
-Usage: rv-pdfauth verify-log <LOG>
+Usage: rv-pdfauth verify-log [OPTIONS] <LOG>
 
 Arguments:
   <LOG>
@@ -506,17 +509,32 @@ Arguments:
           Example: rakvor-out/logs/20261019T101500Z-a1b2c3
 
 Options:
+      --tsa-ca <FILE>
+          CA bundle (PEM, one or more certificates, or one DER certificate) that the TSA certificate
+          must chain to. Obtain it from the TSA's own repository, not from the token.
+          Default: none (the TSA signature is checked, the chain is not validated)
+          Example: --tsa-ca C:\certs\tsa-roots.pem
+
   -h, --help
           Print help (see a summary with '-h')
 
 EXAMPLES:
   rv-pdfauth verify-log rakvor-out/logs/20261019T101500Z-a1b2c3/audit.jsonl
   rv-pdfauth verify-log rakvor-out/logs/20261019T101500Z-a1b2c3
+  rv-pdfauth verify-log rakvor-out/logs/20261019T101500Z-a1b2c3 --tsa-ca digicert-tsa-roots.pem
+
+TIMESTAMP CHECKS:
+  For each timestamp-<N>.tsr: the token covers the chain head of entry N; the TSA's CMS signature is
+  valid (signer certificate in the token, ESS signing-certificate binding, message digest over the
+  TSTInfo, RSA signature, timeStamping key usage). Without --tsa-ca the output says "chain not
+  validated"; with it the TSA certificate must chain to a certificate of the bundle (signatures,
+  validity at the token's time, CA flag). Revocation is not checked.
 
 EXIT CODES:
-  0  The chain is intact.
-  1  The log cannot be read.
-  3  The chain is broken: at least one entry was edited, deleted or re-ordered.
+  0  The chain is intact and every timestamp token verifies.
+  1  The log or the --tsa-ca file cannot be read.
+  3  The chain is broken (an entry was edited, deleted or re-ordered), or a timestamp token does not
+     verify (altered token, invalid TSA signature, chain not trusted by --tsa-ca).
 ```
 
 ## rv-pdfauth self-test

@@ -1,4 +1,4 @@
-# cargo-fuzz target for the PDF layer (nightly only, not part of the workspace or of CI):
+# cargo-fuzz target for the PDF layer (nightly only, not part of the workspace; CI: .github/workflows/fuzz.yml):
 #   cargo install cargo-fuzz
 #   cargo +nightly fuzz run analyze -- -max_total_time=600
 # Seed the corpus with the samples: mkdir -p fuzz/corpus/analyze && cp examples/sample/evidence/*.pdf fuzz/corpus/analyze/

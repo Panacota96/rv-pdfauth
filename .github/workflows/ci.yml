@@ -44,6 +44,38 @@ jobs:
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
           ./actionlint -color
 
+  oracle:
+    # Independent PDF oracles (ADR 0001): pikepdf/qpdf and pyHanko re-derive revisions, page counts, trailer
+    # IDs, the merged xref and every signature verdict of the samples; any disagreement fails the build.
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain pinned in rust-toolchain.toml
+        id: toolchain
+        shell: bash
+        run: echo "channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.toolchain.outputs.channel }}
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Oracles (test-only, never shipped)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q qpdf
+          pip install pikepdf pyhanko
+      - name: Cross-check the PDF layer against pikepdf/qpdf and pyHanko
+        run: python tests/oracle_pdf.py | tee oracle.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: oracle-report-${{ github.sha }}
+          path: oracle.txt
+          retention-days: 30
+
   msrv:
     # The minimum Rust versions declared in Cargo.toml (rust-version) really build: 1.88 for the CLI and the
     # core crates (edition 2024 let chains), 1.95 for the GUI (egui 0.37). `cargo +X` overrides rust-toolchain.toml.

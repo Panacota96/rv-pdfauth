@@ -1,0 +1,49 @@
+name: Fuzz
+
+# cargo-fuzz on the PDF layer (ADR 0001): analyze() must never panic, overflow the stack or hang.
+# Nightly, and on demand. The stable stand-in that runs on every push is src/pdf/tests/no_panic.rs.
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: "Fuzzing time in seconds"
+        required: false
+        default: "600"
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FUZZ_SECONDS: ${{ inputs.seconds || '600' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Nightly toolchain (cargo-fuzz needs it; skipped, not failed, when nightly is unavailable)
+        id: nightly
+        continue-on-error: true
+        uses: dtolnay/rust-toolchain@nightly
+      - name: cargo-fuzz
+        if: steps.nightly.outcome == 'success'
+        run: cargo +nightly install cargo-fuzz --locked
+      - name: Seed corpus with the sample PDFs
+        if: steps.nightly.outcome == 'success'
+        run: |
+          mkdir -p fuzz/corpus/analyze
+          cp examples/sample/evidence/*.pdf tests/fixtures/visual/*.pdf fuzz/corpus/analyze/
+      - name: Fuzz analyze() (a crash, panic, timeout or out-of-memory fails the job)
+        if: steps.nightly.outcome == 'success'
+        run: cargo +nightly fuzz run analyze -- -max_total_time="$FUZZ_SECONDS" -timeout=30 -rss_limit_mb=2048
+      - name: Nightly unavailable
+        if: steps.nightly.outcome != 'success'
+        run: echo "::warning title=fuzz::nightly toolchain unavailable, fuzzing skipped this time"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-artifacts-${{ github.run_id }}
+          path: fuzz/artifacts/
+          retention-days: 30

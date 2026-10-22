@@ -84,6 +84,6 @@ written**; they are tracked as gaps in [admissibility.md](../admissibility.md#co
 | Agreed above | State of the code at this date | Gap |
 | --- | --- | --- |
 | Worker in a Job Object with "no network" | Memory cap, kill-on-close and timeout are enforced. A Job Object cannot block network access, so "no network" means: the worker code path contains no network code (tested); on Linux the worker also gets an empty network namespace (`unshare(CLONE_NEWNET)`, fallback recorded); on Windows there is no OS-level network block | G23 (partial) |
-| Signature results cross-checked in CI against pyHanko and poppler `pdfsig` | `tests/oracle_pdf.py` (pikepdf/qpdf, pyHanko) exists and is run manually; not in CI; no `pdfsig` comparison | G21 |
-| `cargo-fuzz` run in CI nightly | `fuzz/fuzz_targets/analyze.rs` exists; no scheduled workflow | G21 |
+| Signature results cross-checked in CI against pyHanko and poppler `pdfsig` | `tests/oracle_pdf.py` (pikepdf/qpdf, pyHanko) runs in the CI job `oracle` on every push (disagreement fails the build); there is **no** `pdfsig` comparison | G21 (partial) |
+| `cargo-fuzz` run in CI nightly | `.github/workflows/fuzz.yml`: nightly (02:17 UTC) and on demand, 10 minutes on `analyze()` seeded with the samples; skipped with a warning if the nightly toolchain cannot be installed | — (done) |
 | PDFium "digest in `environment.json`" | The library path, SHA-256 and pinned tag are recorded per PDF in the `item_analyzed` audit entry (`details.analysis.visual.renderer`), not in `environment.json` | — (documented) |

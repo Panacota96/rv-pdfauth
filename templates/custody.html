@@ -29,6 +29,12 @@
 <p>{{ custody.operation_text }}</p>
 <div class="kv"><div>{{ custody.examiner }}</div><div>{{ run.actor }}</div></div>
 
+<h2>{{ custody.persons }}</h2>
+<p class="note">{{ custody.persons_note }}</p>
+<table class="blank"><tr><th>{{ custody.role }}</th><th>{{ custody.full_name }}</th><th>{{ custody.position }}</th><th>{{ custody.id_type }}</th><th>{{ custody.id_number }}</th><th>{{ custody.signature_line }}</th></tr>
+{% for r in custody.person_rows %}<tr><td>{{ r }}</td><td></td><td></td><td></td><td></td><td></td></tr>{% endfor %}
+</table>
+
 <h2>{{ custody.transfers }}</h2>
 <table class="blank"><tr><th>{{ custody.date_time }}</th><th>{{ custody.delivered_by }}</th><th>{{ custody.received_by }}</th><th>{{ custody.purpose }}</th><th>{{ custody.condition }}</th></tr>
 {% for r in custody.blank_rows %}<tr><td></td><td></td><td></td><td></td><td></td></tr>{% endfor %}

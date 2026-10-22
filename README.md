@@ -55,7 +55,7 @@ flowchart LR
 Check the download before use: SHA-256, provenance attestation, Authenticode and the PDFium library, step by
 step in [docs/installation.md](docs/installation.md) (summary in [SECURITY.md](SECURITY.md#verifying-a-release)).
 
-**From source** (any OS, Rust 1.88+; auditors: [docs/installation.md](docs/installation.md#9-build-from-source-for-auditors)):
+**From source** (any OS, Rust 1.88+ for the CLI, 1.95+ for the GUI; the pinned build compiler is in `rust-toolchain.toml`; auditors: [docs/installation.md](docs/installation.md#9-build-from-source-for-auditors)):
 
 ```bash
 cargo build --release

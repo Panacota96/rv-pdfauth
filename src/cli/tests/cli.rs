@@ -266,6 +266,83 @@ fn executable_under_another_name_exits_3() {
 }
 
 #[test]
+fn custody_form_has_identification_fields_for_both_jurisdictions() {
+    let ev = tempfile::tempdir().unwrap();
+    std::fs::write(ev.path().join("notes.txt"), b"plain text evidence").unwrap();
+    for (j, lang, words) in [
+        (
+            "co",
+            "es",
+            [
+                "Cargo",
+                "Tipo de documento de identidad",
+                "Testigo",
+                "Auxiliar",
+            ],
+        ),
+        (
+            "fr",
+            "fr",
+            [
+                "Qualité / fonction",
+                "Type de pièce d'identité",
+                "Témoin",
+                "Assistant",
+            ],
+        ),
+    ] {
+        let out = tempfile::tempdir().unwrap();
+        bin()
+            .args(["analyze", "-i"])
+            .arg(ev.path())
+            .args([
+                "--jurisdiction",
+                j,
+                "--actor",
+                "Ana Ruiz",
+                "--progress",
+                "none",
+                "-o",
+            ])
+            .arg(out.path())
+            .assert()
+            .code(0);
+        let item = only_dir(&only_dir(&out.path().join("reports")).join("items"));
+        let html = std::fs::read_to_string(item.join(format!("custody.{}.html", lang))).unwrap();
+        let html = html
+            .replace("&#x27;", "'")
+            .replace("&#39;", "'")
+            .replace("&#x2f;", "/");
+        for w in words {
+            assert!(html.contains(w), "{} form lacks {:?}", j, w);
+        }
+        let en = std::fs::read_to_string(item.join("custody.en.html"))
+            .unwrap()
+            .replace("&#x2f;", "/");
+        for w in [
+            "Position / capacity",
+            "ID document type",
+            "ID document number",
+            "Witness",
+            "Assistant",
+            "Examiner: Ana Ruiz",
+        ] {
+            assert!(en.contains(w), "{} English form lacks {:?}", j, w);
+        }
+        let pdf = std::fs::read(item.join(format!("custody.{}.pdf", lang))).unwrap();
+        assert!(pdf.starts_with(b"%PDF-"));
+        let json: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(item.join("custody.json")).unwrap()).unwrap();
+        assert_eq!(json["examiner_identity"]["name"], "Ana Ruiz");
+        for k in ["position", "id_type", "id_number"] {
+            assert!(json["examiner_identity"][k].is_null(), "{}", k);
+        }
+        assert_eq!(json["assistants"], serde_json::json!([]));
+        assert_eq!(json["witnesses"], serde_json::json!([]));
+    }
+}
+
+#[test]
 fn self_test_passes() {
     bin()
         .arg("self-test")
@@ -314,12 +391,50 @@ fn trust_timestamp_signature_and_custody_with_test_pki() {
         .code(3)
         .stdout(predicate::str::contains("timestamp: ok"));
     let logs = only_dir(&out.path().join("logs"));
+    // The TSA's CMS signature is checked; the chain only with --tsa-ca.
     bin()
         .arg("verify-log")
         .arg(&logs)
         .assert()
         .code(0)
-        .stdout(predicate::str::contains("covers entry"));
+        .stdout(predicate::str::contains("covers entry"))
+        .stdout(predicate::str::contains("TSA signature valid"))
+        .stdout(predicate::str::contains("chain not validated"));
+    bin()
+        .arg("verify-log")
+        .arg(&logs)
+        .arg("--tsa-ca")
+        .arg(pki.path().join("ca.pem"))
+        .assert()
+        .code(0)
+        .stdout(predicate::str::contains(
+            "chain validated to O=Rakvor TEST,CN=Rakvor TEST CA",
+        ));
+    // Another CA does not vouch for this TSA.
+    let other = tempfile::tempdir().unwrap();
+    let py = std::env::var("RV_TEST_PYTHON").unwrap_or_else(|_| "python3".into());
+    let made = std::process::Command::new(&py)
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fake_tsa.py"))
+        .arg("certs")
+        .arg(other.path())
+        .status()
+        .unwrap();
+    assert!(made.success());
+    bin()
+        .arg("verify-log")
+        .arg(&logs)
+        .arg("--tsa-ca")
+        .arg(other.path().join("ca.pem"))
+        .assert()
+        .code(3)
+        .stdout(predicate::str::contains("chain not validated"));
+    bin()
+        .arg("verify-log")
+        .arg(&logs)
+        .arg("--tsa-ca")
+        .arg(other.path().join("missing.pem"))
+        .assert()
+        .code(1);
     let item = only_dir(&only_dir(&out.path().join("reports")).join("items"));
     for f in [
         "custody.json",
@@ -338,10 +453,29 @@ fn trust_timestamp_signature_and_custody_with_test_pki() {
         .find(|p| p.extension().is_some_and(|x| x == "tsr"))
         .unwrap();
     let mut b = std::fs::read(&tsr).unwrap();
+    // The last byte of a token is the last byte of the TSA's RSA signature value.
     let last = b.len() - 1;
     b[last] ^= 0xff;
-    std::fs::write(&tsr, b).unwrap();
-    bin().arg("verify-log").arg(&logs).assert().code(3);
+    std::fs::write(&tsr, &b).unwrap();
+    bin()
+        .arg("verify-log")
+        .arg(&logs)
+        .assert()
+        .code(3)
+        .stdout(predicate::str::contains("missing or altered"));
+    // Even with the recorded token digest updated to match, the signature check catches it.
+    let meta_path = tsr.with_extension("json");
+    let mut meta: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&meta_path).unwrap()).unwrap();
+    meta["token_sha256"] =
+        rv_pdfauth_core::hash::hash_bytes(&b, rv_pdfauth_core::HashAlgo::Sha256).into();
+    std::fs::write(&meta_path, meta.to_string()).unwrap();
+    bin()
+        .arg("verify-log")
+        .arg(&logs)
+        .assert()
+        .code(3)
+        .stdout(predicate::str::contains("signature value does not verify"));
     // Offline run: pending, then added later with `timestamp`.
     let out2 = tempfile::tempdir().unwrap();
     bin()
@@ -558,4 +692,70 @@ fn case_folder_analysis_verify_case_and_tampering() {
         .assert()
         .code(3)
         .stdout(predicate::str::contains("registry.json"));
+}
+
+/// The certificate password typed at the interactive prompt is not echoed. The binary runs on a
+/// pseudo-terminal (Python `pty`), so the old line-mode prompt would have echoed the typed text back.
+#[cfg(unix)]
+#[test]
+fn certificate_password_prompt_does_not_echo() {
+    let py = std::env::var("RV_TEST_PYTHON").unwrap_or_else(|_| "python3".into());
+    if !std::process::Command::new(&py)
+        .args(["-c", "import pty"])
+        .status()
+        .is_ok_and(|s| s.success())
+    {
+        eprintln!("skipping: no Python with pty ({})", py);
+        return;
+    }
+    let out = tempfile::tempdir().unwrap();
+    let script = r#"
+import os, pty, sys, time
+exe, args = sys.argv[1], sys.argv[1:]
+pid, fd = pty.fork()
+if pid == 0:
+    os.environ["RV_NO_TIMESTAMP"] = "1"
+    os.environ.pop("RV_SIGN_PASSWORD", None)
+    os.execv(exe, args)
+buf = b""
+deadline = time.time() + 60
+while b"password" not in buf.lower() and time.time() < deadline:
+    try:
+        buf += os.read(fd, 4096)
+    except OSError:
+        break
+time.sleep(0.5)  # let the prompt switch echo off before typing
+os.write(fd, b"typed-secret-123\n")
+while True:
+    try:
+        chunk = os.read(fd, 4096)
+    except OSError:
+        break
+    if not chunk:
+        break
+    buf += chunk
+_, status = os.waitpid(pid, 0)
+sys.stdout.write(buf.decode("utf-8", "replace"))
+sys.stdout.write("\nEXIT=%d\n" % os.waitstatus_to_exitcode(status))
+"#;
+    let res = std::process::Command::new(&py)
+        .arg("-c")
+        .arg(script)
+        .arg(assert_cmd::cargo::cargo_bin("rv-pdfauth"))
+        .args(["analyze", "-i"])
+        .arg(sample())
+        .args(["--progress", "none", "--sign-cert"])
+        .arg(out.path().join("missing.p12"))
+        .arg("-o")
+        .arg(out.path())
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&res.stdout);
+    assert!(text.contains("input hidden"), "no prompt: {}", text);
+    assert!(
+        !text.contains("typed-secret-123"),
+        "the password was echoed: {}",
+        text
+    );
+    assert!(text.contains("EXIT=1"), "{}", text);
 }

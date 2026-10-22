@@ -184,12 +184,12 @@ impl HashInvApp {
         while let Ok(m) = rx.try_recv() {
             match m {
                 Msg::Event(e) => {
-                    if let Event::Timestamp { status, reason, .. } = &e {
-                        if status != "ok" {
-                            self.state
-                                .warnings
-                                .push(format!("timestamp: {}", reason.as_deref().unwrap_or("-")));
-                        }
+                    if let Event::Timestamp { status, reason, .. } = &e
+                        && status != "ok"
+                    {
+                        self.state
+                            .warnings
+                            .push(format!("timestamp: {}", reason.as_deref().unwrap_or("-")));
                     }
                     self.state.apply(&e)
                 }
@@ -399,10 +399,10 @@ impl HashInvApp {
                     } else {
                         r.on_disabled_hover_text(tip)
                     };
-                    if r.changed() {
-                        if let Err(e) = self.state.toggle_algo(a) {
-                            self.notice = Some(e);
-                        }
+                    if r.changed()
+                        && let Err(e) = self.state.toggle_algo(a)
+                    {
+                        self.notice = Some(e);
                     }
                 }
             });
@@ -821,10 +821,10 @@ impl HashInvApp {
                     ui.colored_label(RED, e);
                 }
             }
-            if let Some(p) = v.current_page() {
-                if p.changed {
-                    ui.weak(format!("{} {}", p.boxes.len(), tr("regions")));
-                }
+            if let Some(p) = v.current_page()
+                && p.changed
+            {
+                ui.weak(format!("{} {}", p.boxes.len(), tr("regions")));
             }
             if let Some(pr) = v.current_pair() {
                 if !pr.pages_added.is_empty() {
@@ -1021,13 +1021,12 @@ impl HashInvApp {
         if let Some(p) = sel_pair {
             vw.select_pair(p);
         }
-        if let Some(r) = pick_rev {
-            if let Some(p) = vw
+        if let Some(r) = pick_rev
+            && let Some(p) = vw
                 .current_item()
                 .and_then(|it| it.pairs.iter().position(|p| p.to == r))
-            {
-                vw.select_pair(p);
-            }
+        {
+            vw.select_pair(p);
         }
         if let Some(p) = sel_page {
             vw.select_page(p);

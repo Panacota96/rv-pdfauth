@@ -238,6 +238,10 @@ PDF", which erases all history. The tool's limitations are printed in every repo
 - When a PDF is printed to PDF, flattened, optimised or regenerated, its earlier revisions and most editing
   traces are lost; only its last state can be examined.
 - Dates and producer names are written by the software that saved the file and can be set freely.
+
+Item-specific limitations are added where they apply: `VISUAL_DIFF_UNAVAILABLE` is printed in an item's reports
+(and listed in `technical.json` → `limitations`) when PDFium was missing or could not open or render a revision, so
+part or all of the visual comparison is missing.
 - Changes inside the pixels of a scanned image (retouching) are not detected.
 - The copy examined is compared with nothing before intake: integrity is proven **from intake onward**.
 
@@ -266,7 +270,7 @@ PDF", which erases all history. The tool's limitations are printed in every repo
 | Timestamp, report signing | [src/core/src/trust.rs](../src/core/src/trust.rs), [src/core/src/report/pdf.rs](../src/core/src/report/pdf.rs) | default TSA `http://timestamp.digicert.com`; HTTP timeout 15 s; response ≤ 1 MiB |
 
 The PDF layer (`src/pdf`) is `#![forbid(unsafe_code)]`, never writes files and never panics by design (fuzzed
-with [fuzz/fuzz_targets/analyze.rs](../fuzz/fuzz_targets/analyze.rs); robustness tests in
+nightly in CI with [fuzz/fuzz_targets/analyze.rs](../fuzz/fuzz_targets/analyze.rs); robustness tests in
 [src/pdf/tests/no_panic.rs](../src/pdf/tests/no_panic.rs)). The core decides what to write and audits it.
 
 ## B2 Pipeline and reads of the evidence
@@ -285,7 +289,7 @@ sequenceDiagram
     R->>A: item_hashed (digests, mtime_unchanged)
     R->>A: analysis_started (isolation)
     R->>W: spawn, limits, "RV-WORKER-GO"
-    W->>E: pass 2: read-only memory map, parse, render
+    W->>E: pass 2: read-only memory map, re-hash, parse, render
     W->>O: revisions/, objects.json, embedded/, visual/
     W-->>R: one JSON reply (findings, details, outputs)
     R->>O: hash every output
@@ -293,10 +297,13 @@ sequenceDiagram
 ```
 
 The evidence is read **twice**: once for hashing (sequential) and once by the worker (memory-mapped, random
-access). Both opens are read-only. The second read is not re-hashed: if the file changed between the two reads,
-the findings would describe different bytes than the digests. The modification time is compared around the first
-pass only (`mtime_unchanged`). This is why the tool must run on a write-protected copy (see
-[admissibility.md](admissibility.md#consolidated-gap-list), gap G20).
+access). Both opens are read-only. The worker **re-hashes the memory-mapped bytes it parses** with the run's
+primary algorithm (the first of `--hash`) and compares the digest with the first pass (`--expect-digest` on the
+worker command line). The comparison is recorded in `details.evidence_rehash` (algorithm, both digests, bytes,
+`match`) and in the `item_analyzed` audit entry; a difference raises `EVIDENCE_CHANGED_DURING_ANALYSIS` (high):
+the file changed between the two reads, so the findings may describe other bytes than the digests. The
+modification time is still compared around the first pass (`mtime_unchanged`). Run on a write-protected copy
+anyway: the check detects a change, it does not prevent it (gap G20, closed in code).
 
 Non-PDF files (no `%PDF-` at offset 0 and no `.pdf` extension) get only the inventory checks of
 [src/core/src/analyzer.rs](../src/core/src/analyzer.rs) (type by signature, extension mismatch, executable, empty),
@@ -420,10 +427,11 @@ stateDiagram-v2
 - **Hybrid** files (table + `/XRefStm`, ISO 32000-1 §7.5.8.4) are reported as `HYBRID_XREF` because readers that
   ignore `/XRefStm` and readers that use it can see different objects; conflicting entries are warned.
 - **Where the warnings are.** The PDF layer returns them as `PdfReport.warnings` (byte offset + message, at most
-  500, duplicates removed). In this version they are **not** copied into `technical.json` or the HTML/PDF
-  reports (gap G25), although the `XREF_OFFSETS_INCONSISTENT` wording refers to them. To read them, run the PDF
-  layer on the evidence copy from the source tree: `cargo run -p rv-pdfauth-pdf --example dump -- <file.pdf>`
-  (JSON on stdout; uses the bundled fingerprint database only).
+  500, then one "further warnings suppressed" entry; duplicates removed). The core writes the complete list to
+  `warnings.json` in the item folder (kind `parser_warnings`, schema `rakvor.pdf-warnings/1`: `count`,
+  `parser_cap`, `parser_cap_reached`, `warnings[]`), which is hashed and audited (`output_written`) like every
+  output. `technical.json` → `pdf.warnings` holds the count, the first 100 rows and the file name; the technical
+  HTML/PDF report prints the same 100 rows (byte offset, message) and says how many more are in `warnings.json`.
 
 ## B5 Revision extraction (byte-exact prefixes)
 
@@ -519,9 +527,10 @@ zone is missing, either the wall clocks or the instants may match.
 | `MODDATE_BEFORE_CREATIONDATE` | In any revision, Info ModDate < CreationDate, or XMP ModifyDate < CreateDate (each pair reported once) | high |
 | `REVISION_TIME_GAP` | Consecutive revisions dated ≥ 3600 s apart; date = Info ModDate, else XMP ModifyDate, else (revision 1 only) CreationDate | info |
 | `PRODUCER_CHANGED_BETWEEN_REVISIONS` | Info Producer of revision *k* ≠ that of *k−1* (exact string) | medium |
+| `REVISION_DATE_NOT_MONOTONIC` | Revision *k* dated **earlier** than revision *k−1* (same date rule as `REVISION_TIME_GAP`; equal dates give nothing). An incremental update is appended after its predecessor, so its save date should not go back in time | medium |
 
-A revision dated **before** the previous one gives no finding in this version (the GUI timeline shows the gap in
-red); check the revision table of the technical report.
+The GUI timeline also shows such a negative interval in red, and the revision table of the technical report gives
+both dates.
 
 ## B8 Producer and editor fingerprints
 
@@ -731,8 +740,11 @@ size change).
 **Limits.** A change smaller than about one pixel at the chosen DPI (≈ 0.23 mm at 110 DPI) can vanish; colour
 changes of ≤ 32 levels per channel are ignored; pages beyond `--max-pages` are only compared structurally
 (`pages_not_compared`); added or removed pages are listed, not drawn; content not rendered (metadata, invisible
-text) cannot appear. The per-page numbers (boxes, effective DPI, changed pixels) are computed but only the summary
-(`status`, PNG list, pages changed) reaches `technical.json` in this version.
+text) cannot appear. Every per-page measurement (status, changed pixels, `changed_ppm`, `changed_ratio`,
+effective DPI, rendered width × height, page-size change, boxes and the PNG name) is kept in `technical.json` →
+`pdf.visual.pairs[].pages[]`; the technical HTML/PDF report shows them as a *Per-page measurements* table (first
+200 rows, the rest in `technical.json`). A pair or page PDFium could not open or render is listed with its reason
+and adds the item limitation `VISUAL_DIFF_UNAVAILABLE`.
 
 ## B13 Worker isolation
 
@@ -767,9 +779,20 @@ stateDiagram-v2
 Other `PARSER_FAILED` reasons: `spawn_failed`, `isolation_failed` (Job Object could not be created/assigned),
 `unreadable` (memory map failed), `panic` (in-process parser panic; the parser is designed never to panic).
 Files left by a failed worker are kept, hashed and audited as `partial_output`; they support no finding. The child
-never writes the audit log. The worker is **not** network-isolated by the operating system (no firewall rule or
-job network limit); it simply has no network code. Fault injection (`RV_WORKER_TEST_FAULT=crash|hang|oom`) exists
-in debug builds only.
+never writes the audit log.
+
+**Network.** The worker code path has no network code: no HTTP client or socket is used by the worker, the
+analyzer, the PDF layer or the renderer (the timestamp client lives in `trust.rs`, used by the parent only; a test,
+`worker_code_path_has_no_network_code`, checks the sources and the crate manifests). On **Linux** the worker is
+also started in an empty network namespace (`unshare(CLONE_NEWNET)` in `pre_exec`, or with `CLONE_NEWUSER` where
+unprivileged user namespaces are allowed): it then has no usable network interface at all. If the kernel refuses
+both, the analysis still runs and the fallback is recorded. The parent compares the child's `/proc/<pid>/ns/net`
+with its own and writes `worker.network = {isolated, method, detail}` into the `item_analyzed` audit entry
+(`method: "linux_netns"` or `"none"`). On **Windows** a Job Object cannot block network access, so there is no
+OS-level network block for the worker (`isolated: false`, `method: "none"` is recorded); the guarantee there is
+the absence of network code, plus a firewall rule if the examiner adds one. Fault injection
+(`RV_WORKER_TEST_FAULT=crash|hang|oom`, and `RV_WORKER_TEST_NO_NETNS=1` for the namespace fallback) exists in debug
+builds only.
 
 ## B14 The audit hash chain
 
@@ -846,12 +869,19 @@ sequenceDiagram
   a readable `timestamp-<NNNNN>.json`.
 - Offline → `timestamp_pending` and the run completes; `rv-pdfauth timestamp <log>` later re-verifies the chain and
   appends `timestamp_obtained` for the then-current head (earlier entries are never rewritten).
-- `verify-log` re-checks: the token file's SHA-256, the TSA status, and that the token's imprint equals the
-  `entry_hash` of `covers_seq`. It does **not** verify the TSA's signature, certificate chain, policy OID or
-  accuracy. Do that with OpenSSL against the TSA's published chain (see [usage.md](usage.md#6-timestamps)) — a
-  required step before relying on the time in court (gap G18).
-- The default TSA URL is plain HTTP; integrity rests on the TSA's signature, which is why the OpenSSL check
-  matters. eIDAS qualified status depends on the TSA chosen (see [admissibility.md](admissibility.md)).
+- `verify-log` re-checks: the token file's SHA-256, the TSA status, that the token's imprint equals the
+  `entry_hash` of `covers_seq`, and the **TSA's CMS signature** (RFC 3161 / RFC 5652, in
+  [trust.rs](../src/core/src/trust.rs) with the RustCrypto crates): eContentType `id-ct-TSTInfo`; exactly one
+  SignerInfo whose certificate is in the token (`certReq` is always set); signed attributes `content-type`,
+  `message-digest` = hash of the TSTInfo, ESS `signing-certificate` (v1, SHA-1) or `signing-certificate-v2`
+  (default SHA-256) equal to the hash of that certificate; the RSA PKCS#1 v1.5 signature (SHA-256/384/512; other
+  algorithms are reported as not supported and fail the check); and the `id-kp-timeStamping` extended key usage.
+  With `--tsa-ca <bundle>` the certificate chain is also validated up to a certificate of the bundle at `genTime`
+  (each signature, validity period, CA flag of issuers); without it the output says *chain not validated*.
+  Revocation (CRL/OCSP), the policy OID and the accuracy are **not** checked: for those, and as an independent
+  second tool, use OpenSSL (see [usage.md](usage.md#6-timestamps)) before relying on the time in court (G18).
+- The default TSA URL is plain HTTP; integrity rests on the TSA's signature, which is why the signature and chain
+  checks matter. eIDAS qualified status depends on the TSA chosen (see [admissibility.md](admissibility.md)).
 
 Standards: RFC 3161 (Time-Stamp Protocol), RFC 5816 (ESSCertIDv2 update), RFC 5652 (CMS).
 
@@ -914,7 +944,7 @@ Academic and practitioner literature
 - Didier Stevens, *PDF Tools* (pdfid, pdf-parser) — practitioner tools for manual cross-checks of PDF structure.
 
 Independent oracles used to cross-check this tool: pikepdf/qpdf and pyHanko via
-[tests/oracle_pdf.py](../tests/oracle_pdf.py) (run manually in this version, not in CI); Python `hashlib`/`blake3`
+[tests/oracle_pdf.py](../tests/oracle_pdf.py) (CI job `oracle`, every push); Python `hashlib`/`blake3`
 for [examples/sample/expected_hashes.csv](../examples/sample/expected_hashes.csv); OpenSSL for RFC 3161 tokens.
 
 Figures on this page are generated by [tests/make_theory_figures.py](../tests/make_theory_figures.py) from the

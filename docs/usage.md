@@ -157,9 +157,9 @@ flowchart TB
 | Output | For | What to use it for |
 | --- | --- | --- |
 | `statistics.*` | Examiner, lawyer | Run overview: who, when, interface, algorithms, totals, findings by severity and code, PDFs with several revisions / signatures / online-editor fingerprints, duplicate groups, timestamp status, audit chain head and entry count at the time it was written |
-| `technical.*` | Examiner, opposing expert | Everything about one file: path, size, all digests, findings with *what it shows / what it does not prove*, method, audit entries `#first–#last`, limitations; for PDFs: revision history table (byte range, Info/XMP dates, producer, time since previous, objects added/changed/deleted, pages changed, signed by) and timeline, signatures, fonts (first 100 rows; all in `objects.json`), producer fingerprints with the databases used (name, version, SHA-256), visual comparison images, extracted files with digests |
+| `technical.*` | Examiner, opposing expert | Everything about one file: path, size, all digests, findings with *what it shows / what it does not prove*, method, audit entries `#first–#last`, limitations; for PDFs: revision history table (byte range, Info/XMP dates, producer, time since previous, objects added/changed/deleted, pages changed, signed by) and timeline, signatures, fonts (first 100 rows; all in `objects.json`), producer fingerprints with the databases used (name, version, SHA-256), visual comparison images and per-page measurements (changed pixels and share, regions, DPI, page-size change), parser warnings with byte offsets (first 100; all in `warnings.json`), extracted files with digests |
 | `summary.*` | Client | Plain-language status, the primary fingerprint, the findings in one sentence each, a short document history ("saved 3 times; last change 9 days after creation, with a PDF editor") and the next step |
-| `custody.*` | Custody record | Jurisdiction form (Spanish for `co`, French for `fr`) + English copy, pre-filled from the run, with blank transfer rows to sign. An internal record, used **alongside** the official form ([admissibility.md](admissibility.md) G9) |
+| `custody.*` | Custody record | Jurisdiction form (Spanish for `co`, French for `fr`) + English copy, pre-filled from the run, with a persons table (examiner, assistants, witnesses: name, position, ID type and number, signature) and transfer rows to fill in by hand and sign. An internal record, used **alongside** the official form ([admissibility.md](admissibility.md) G9) |
 | `revisions/rev-NN.pdf` | Examiner | Each saved version, byte-exact prefix of the evidence; open them in any viewer, re-derive them with `head -c` ([theory.md B5](theory.md#b5-revision-extraction-byte-exact-prefixes)) |
 | `visual/rev-AA-vs-BB-page-PPP.png` | Everyone | Previous and current page side by side, changed regions outlined in violet; the caption gives the changed share and region count |
 | `objects.json` | Expert | Object tree of every revision: id, file offset, type, dictionary (depth ≤ 8, ≤ 1000 entries per level, long strings hex-truncated), object stream, stream offset/length |
@@ -197,12 +197,13 @@ is the overreach to avoid in a report. The exact wording printed in reports is i
 | `METADATA_INFO_XMP_MISMATCH` (medium) | Which field; the XMP history (`technical.json`) and producer of each revision | Falsified content — many tools update only one store |
 | `MODDATE_BEFORE_CREATIONDATE` (high) | Raw values and time zones in the revision table; the producer's known date bugs | Deliberate backdating (clocks, zones, templates) |
 | `REVISION_TIME_GAP` (info) | Whether the gap fits the client's account (e.g. signed on day 1, amended on day 9) | When the change really happened — dates are set by the saving software |
+| `REVISION_DATE_NOT_MONOTONIC` (medium) | Both dates in the revision table; the clock and time zone of the machine that saved the later revision | Backdating — a wrong clock or an editor copying old dates does this too |
 | `PRODUCER_CHANGED_BETWEEN_REVISIONS` (medium) | Which software saved which revision; is it a known workflow (sign tool, form filler)? | Who used the software |
 | `EDITOR_FINGERPRINT` (medium) | What that revision changed (visual diff, objects added/changed) | That content was changed — editors also fill, sign, rotate, compress |
 | `ONLINE_EDITOR_OR_UNLOCKER` (high) | The matched string and field; whether the client used such a service; what that revision changed | Alteration of content; the string can be typed by hand |
 | `PRODUCER_STRUCTURE_MISMATCH` (medium) | The differing traits; whether an optimiser or later re-save explains them | Falsification; versions of one program differ |
 | `UNKNOWN_PRODUCER` (info) | Nothing, unless it matters; consider learning it from known originals | Suspicion — the database is limited |
-| `XREF_OFFSETS_INCONSISTENT` (medium) | Which revisions; the warnings with offsets (`cargo run -p rv-pdfauth-pdf --example dump -- <file>`, see [theory.md](theory.md#cross-reference-resolution-per-revision)); compare with another parser (qpdf) | Manipulation — buggy writers and damaged transfers do this |
+| `XREF_OFFSETS_INCONSISTENT` (medium) | Which revisions; the parser warnings with byte offsets (*Parser warnings* table of the technical report, complete list in the item's `warnings.json`; see [theory.md](theory.md#cross-reference-resolution-per-revision)); compare with another parser (qpdf) | Manipulation — buggy writers and damaged transfers do this |
 | `HYBRID_XREF` (low) | Whether the table and stream views differ (warnings) | Anything by itself — some mainstream writers do it |
 | `DATA_AFTER_FINAL_EOF` (medium) | Extract the trailing bytes (offset = end of last revision) and examine them separately | Hidden content — padding and transfer tools add bytes |
 | `SIGNATURE_INTEGRITY_FAILED` (high) | The reason (`digest_mismatch`, `signature_invalid`, `byterange_*`); validate with Acrobat or pyHanko; obtain the file from another source | Who altered the bytes; a damaged transfer can cause it |
@@ -219,6 +220,7 @@ is the overreach to avoid in a report. The exact wording printed in reports is i
 | `ENCRYPTED_PARTIAL_ANALYSIS` (info) | Obtain the password lawfully and analyse a decrypted copy if content checks matter | Anything from the absence of content findings |
 | `NOT_A_PDF` (info) | The real type (`detected_type`); use a suitable tool | That the file is malicious |
 | `PARSER_FAILED` (high) | The `reason` (table below); re-run with higher limits; examine manually | That the file is malicious or forged |
+| `EVIDENCE_CHANGED_DURING_ANALYSIS` (high) | Which program touched the file (sync client, antivirus); copy it to write-protected media and run again; the results of this run do not describe the hashed evidence | That the original evidence was altered |
 | `EXTENSION_MISMATCH` (medium) | The detected type; open the file with a suitable tool | Intent to hide anything |
 | `EXECUTABLE_CONTENT` (high) | Treat as hostile; analyse in a sandbox | That the program is malicious |
 | `EMPTY_FILE` (info) | Whether the source has the file with content | That it was emptied on purpose |
@@ -238,8 +240,18 @@ digest and item-report digest recorded before it ([theory.md B15](theory.md#b15-
 | `--no-timestamp` / `RV_NO_TIMESTAMP=1` / GUI unticked | No request | Use `rv-pdfauth timestamp` later if needed |
 | Broken chain | `rv-pdfauth timestamp` refuses (exit 3): no timestamp is added to a broken log | Investigate; do not repair |
 
-`rv-pdfauth verify-log` checks the token's digest and that it covers the logged head, **not** the TSA's signature
-and certificate (gap G18). Do that with OpenSSL (Git for Windows ships `openssl.exe`):
+`rv-pdfauth verify-log` checks the token's digest, that it covers the logged head, and the TSA's CMS signature
+(signer certificate in the token, ESS binding, message digest, RSA signature, timeStamping key usage). Give it the
+TSA's CA bundle to validate the certificate chain as well:
+
+```powershell
+rv-pdfauth verify-log <OUT>\logs\<RUN-ID> --tsa-ca C:\certs\tsa-roots.pem
+#     timestamp … covers entry #60: TSA signature valid (signer: …); chain validated to CN=… (revocation not checked)
+```
+
+Without `--tsa-ca` the line ends with *chain not validated*; a token whose signature or chain fails gives exit 3.
+Revocation, the policy OID and the accuracy are not checked by the tool; check them, and cross-check the result
+with a second tool, with OpenSSL (Git for Windows ships `openssl.exe`):
 
 ```bash
 cd <OUT>/logs/<RUN-ID>
@@ -259,7 +271,8 @@ file: it is the evidence that the time is genuine.
 
 `--sign-cert <file.p12|.pfx>` signs **every PDF report** (statistics, technical, summary, custody) with your own
 certificate (RSA keys only). The password is read from the environment variable named by `--sign-pass-env`
-(default `RV_SIGN_PASSWORD`) or asked for on the terminal (the prompt echoes what you type: prefer the variable).
+(default `RV_SIGN_PASSWORD`) or asked for on the terminal without echo (`Certificate password (input hidden):`, read from the console with echo off;
+the GUI field is masked too).
 It is never logged; the log records `signing_certificate_loaded` with the subject and the certificate's SHA-256.
 A wrong password stops the run (`run_failed`, exit 1) before any evidence is read. In the GUI: *5. Trust →
 Certificate…*.
@@ -291,7 +304,7 @@ rv-pdfauth verify-log D:\cases\CASE-2026-014\rv-pdfauth\logs\20261021T103903Z-67
 
 | Step | Command | Proves |
 | --- | --- | --- |
-| 1 | `rv-pdfauth verify-log <log>` (exit 0 intact, 3 broken) | No entry edited, deleted or reordered; timestamp token matches the head it covers |
+| 1 | `rv-pdfauth verify-log <log> [--tsa-ca <bundle>]` (exit 0 intact, 3 broken) | No entry edited, deleted or reordered; timestamp token matches the head it covers and carries a valid TSA signature (and chain, with `--tsa-ca`) |
 | 2 | `python tests/verify_chain.py <log>` (source tree) | Same, with an independent implementation; also re-hashes the evidence listed in `hashes.csv` |
 | 3 | OpenSSL ([Timestamps](#6-timestamps)) | The TSA really signed that head at that time |
 | 4 | Script below | Every report and output file still has the digest recorded in the log |
@@ -393,7 +406,7 @@ The visual diff is *not applicable* (no finding) for single-revision files or wi
 | Command | 0 | 1 | 2 | 3 | 130 |
 | --- | --- | --- | --- | --- | --- |
 | `analyze` | done, no high finding | runtime error (input not found, output not writable, wrong certificate password, missing `--fingerprints-db` file) | usage error (three algorithms, unknown language) | done, ≥ 1 high finding | cancelled (Ctrl+C), partial reports written |
-| `verify-log` | intact | log unreadable | — | broken chain or token mismatch | — |
+| `verify-log` | intact, tokens verify | log or `--tsa-ca` file unreadable | — | broken chain, token mismatch, invalid TSA signature or untrusted chain | — |
 | `timestamp` | obtained and logged | TSA unreachable (nothing changed) | — | broken log (nothing added) | — |
 | `self-test` | all pass | a failure: do not use the build | — | — | — |
 | `fingerprints learn / list / export` | done | file not a PDF / no producer / DB unreadable / output exists | usage error | — | — |

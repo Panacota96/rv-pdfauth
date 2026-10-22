@@ -13,7 +13,8 @@ use std::rc::Rc;
 
 /// Revisions beyond this are merged into the last one (hostile files with thousands of `%%EOF`).
 pub const MAX_REVISIONS: usize = 2000;
-const MAX_WARNINGS: usize = 500;
+/// At most this many parser warnings are kept per file (then one "further warnings suppressed" entry).
+pub const MAX_WARNINGS: usize = 500;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum XEntry {

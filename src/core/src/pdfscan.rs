@@ -10,6 +10,9 @@ use std::path::Path;
 
 /// Inflated embedded streams larger than this are not written (decompression bombs).
 pub const MAX_INFLATED_BYTES: u64 = 256 * 1024 * 1024;
+/// Every parser warning (byte offset + message) of an analysed PDF, written in the item folder.
+pub const WARNINGS_FILE: &str = "warnings.json";
+pub const WARNINGS_SCHEMA: &str = "rakvor.pdf-warnings/1";
 /// At most this many embedded streams are written per item; the rest are listed as skipped.
 pub const MAX_EMBEDDED_OUTPUTS: usize = 1000;
 
@@ -171,6 +174,22 @@ pub fn analyze_pdf(ctx: &AnalyzeCtx) -> Analysis {
             };
         }
     };
+    // The bytes parsed below come from a second read (memory map) of the evidence: re-hash exactly those
+    // bytes with the run's primary algorithm and compare with the first pass.
+    let rehash = ctx.expected_digest.map(|(algo, first)| {
+        let second = crate::hash::hash_bytes(&bytes, algo);
+        let same = second.eq_ignore_ascii_case(first);
+        if !same {
+            findings.push(
+                Finding::new("EVIDENCE_CHANGED_DURING_ANALYSIS", Severity::High)
+                    .with("algorithm", algo.name())
+                    .with("first_pass", first)
+                    .with("second_pass", second.clone()),
+            );
+        }
+        json!({"algorithm": algo.name(), "first_pass": first, "second_pass": second,
+               "bytes": bytes.len(), "match": same})
+    });
     let fp = crate::fingerprints::load(ctx.opts.fingerprints_db.as_deref());
     let pdf_opts = PdfOptions {
         fingerprints: fp.dbs,
@@ -217,6 +236,22 @@ pub fn analyze_pdf(ctx: &AnalyzeCtx) -> Analysis {
         errors: vec![],
     };
 
+    // Parser warnings with their byte offsets (the XREF_OFFSETS_INCONSISTENT and HYBRID_XREF wording refers to
+    // them): the full list goes to warnings.json, hashed and audited like every output; the reports show the
+    // first rows and point at that file.
+    let warnings_doc = json!({
+        "schema": WARNINGS_SCHEMA,
+        "count": report.warnings.len(),
+        "parser_cap": rv_pdfauth_pdf::doc::MAX_WARNINGS,
+        "parser_cap_reached": report.warnings.len() > rv_pdfauth_pdf::doc::MAX_WARNINGS,
+        "warnings": report.warnings,
+    });
+    w.write(
+        WARNINGS_FILE,
+        "parser_warnings",
+        &serde_json::to_vec_pretty(&warnings_doc).unwrap_or_default(),
+    );
+
     // Revisions: exact byte prefixes of the evidence, so each one's digest can be re-derived by anyone.
     let nrev = report.revisions.len();
     if nrev > 1 && ctx.opts.extract_revisions {
@@ -257,6 +292,9 @@ pub fn analyze_pdf(ctx: &AnalyzeCtx) -> Analysis {
     if let Some(m) = details.as_object_mut() {
         m.remove("object_tree");
         m.insert("revision_source".into(), revision_source.into());
+        if let Some(r) = rehash {
+            m.insert("evidence_rehash".into(), r);
+        }
         m.insert("fingerprint_dbs".into(), fp.details.into());
         m.insert("visual".into(), visual);
         if !embedded.is_null() {
@@ -354,6 +392,7 @@ mod tests {
             head: &data[..data.len().min(4096)],
             item_dir: dir,
             opts,
+            expected_digest: None,
         })
     }
 
@@ -458,6 +497,66 @@ mod tests {
     }
 
     #[test]
+    fn parsed_bytes_are_rehashed_and_compared_with_the_first_pass() {
+        use crate::hash::{HashAlgo, hash_bytes};
+        let src = fixture("one-revision.pdf");
+        let data = std::fs::read(&src).unwrap();
+        let opts = DomainOptions {
+            visual_diff: false,
+            ..DomainOptions::default()
+        };
+        let ctx = |dir: &Path, expected: Option<(HashAlgo, &'static str)>| -> Analysis {
+            crate::analyzer::analyze_item(&AnalyzeCtx {
+                path: &src,
+                file_name: "one-revision.pdf",
+                size: data.len() as u64,
+                head: &data[..data.len().min(4096)],
+                item_dir: dir,
+                opts: &opts,
+                expected_digest: expected,
+            })
+        };
+        // Same bytes: recorded as a match, no finding, and the check reaches the audit summary.
+        let good: &'static str = Box::leak(hash_bytes(&data, HashAlgo::Sha256).into_boxed_str());
+        let dir = tempfile::tempdir().unwrap();
+        let a = ctx(dir.path(), Some((HashAlgo::Sha256, good)));
+        assert_eq!(a.details["evidence_rehash"]["match"], true);
+        assert_eq!(a.details["evidence_rehash"]["algorithm"], "sha256");
+        assert_eq!(a.details["evidence_rehash"]["second_pass"], good);
+        assert!(
+            a.findings
+                .iter()
+                .all(|f| f.code != "EVIDENCE_CHANGED_DURING_ANALYSIS")
+        );
+        assert_eq!(
+            crate::analyzer::audit_summary(&a.details)["evidence_rehash"]["match"],
+            true
+        );
+        // A different first-pass digest (the file changed between the two reads): high finding.
+        let dir = tempfile::tempdir().unwrap();
+        let first = "00".repeat(32);
+        let first: &'static str = Box::leak(first.into_boxed_str());
+        let a = ctx(dir.path(), Some((HashAlgo::Sha256, first)));
+        let f = a
+            .findings
+            .iter()
+            .find(|f| f.code == "EVIDENCE_CHANGED_DURING_ANALYSIS")
+            .expect("finding");
+        assert_eq!(f.severity, Severity::High);
+        assert_eq!(f.params["first_pass"], first);
+        assert_eq!(f.params["second_pass"], good);
+        assert_eq!(a.details["evidence_rehash"]["match"], false);
+        // No expected digest: no comparison.
+        let dir = tempfile::tempdir().unwrap();
+        assert!(
+            ctx(dir.path(), None)
+                .details
+                .get("evidence_rehash")
+                .is_none()
+        );
+    }
+
+    #[test]
     fn single_revision_writes_no_revision_files() {
         let dir = tempfile::tempdir().unwrap();
         let a = run(
@@ -481,8 +580,11 @@ mod tests {
             ..DomainOptions::default()
         };
         let a = run(&fixture("two-revisions.pdf"), dir.path(), &opts);
-        assert!(a.outputs.is_empty(), "{:?}", a.outputs);
-        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+        // Only the parser warnings (no evidence content) are always written.
+        let rels: Vec<&str> = a.outputs.iter().map(|o| o.rel_path.as_str()).collect();
+        assert_eq!(rels, [WARNINGS_FILE], "{:?}", a.outputs);
+        assert_eq!(a.outputs[0].kind, "parser_warnings");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
         assert_eq!(a.details["visual"]["status"], "not_applicable");
     }
 

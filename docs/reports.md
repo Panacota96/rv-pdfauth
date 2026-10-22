@@ -82,6 +82,7 @@ the exact rules and thresholds: [theory.md](theory.md).
 | `UNREADABLE` | high | reading failed (OS error) |
 | `NOT_A_PDF` | info | a `.pdf` name without `%PDF-` in the first 1024 bytes |
 | `PARSER_FAILED` | high | the isolated PDF analysis did not complete (timeout, memory, crash, bad output) |
+| `EVIDENCE_CHANGED_DURING_ANALYSIS` | high | the bytes the worker parsed (re-hashed) differ from the digest of the hashing pass |
 | `ENCRYPTED_PARTIAL_ANALYSIS` | info | the PDF is encrypted; content checks skipped |
 | `INCREMENTAL_UPDATES` | low | more than one revision |
 | `VISUAL_CHANGE_BETWEEN_REVISIONS` | medium | rendered pages of consecutive revisions differ, or pages were added/removed |
@@ -89,6 +90,7 @@ the exact rules and thresholds: [theory.md](theory.md).
 | `METADATA_INFO_XMP_MISMATCH` | medium | Info and XMP disagree on producer, creator or dates (final revision) |
 | `MODDATE_BEFORE_CREATIONDATE` | high | a modification date earlier than the creation date (Info or XMP) |
 | `REVISION_TIME_GAP` | info | consecutive revisions dated at least 1 hour apart |
+| `REVISION_DATE_NOT_MONOTONIC` | medium | a revision is dated earlier than the revision before it |
 | `PRODUCER_CHANGED_BETWEEN_REVISIONS` | medium | the Info producer changes between consecutive revisions |
 | `EDITOR_FINGERPRINT` | medium | a revision was saved by a known PDF editor |
 | `ONLINE_EDITOR_OR_UNLOCKER` | high | a revision was saved by an online editor or protection-removal tool |

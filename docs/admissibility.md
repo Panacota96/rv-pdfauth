@@ -2,7 +2,7 @@
 
 > **Not legal advice.** This page maps legal and technical requirements to what RV PDFAuth actually does, so that
 > an examiner, a lawyer or an opposing expert can see where the tool helps and where it does not. It was prepared
-> from a sourced research note dated 2026-10-21 and **must be reviewed by counsel in each jurisdiction before it is
+> from a sourced research note dated 2026-10-21 (pass 2, verification, same date) and **must be reviewed by counsel in each jurisdiction before it is
 > relied on or quoted**. Status: draft for counsel review.
 
 ## Contents
@@ -44,8 +44,14 @@ one part. This page therefore separates three kinds of status:
 Research limits that still apply: the Colombian project PDFs `Ley_906_de_2004.pdf`, `Ley_1564_de_2012.pdf` and
 `manualcadena2.pdf` were verified against official web copies, not the project files — **re-check quoted
 fragments against the project PDFs before publishing**; the ISO/IEC 27037 copy was the free preview (table of
-contents and clauses 1–4); Légifrance refused automated access (CPP read from the Pappers LEGI mirror); eIDAS,
-GDPR, ISO 27041/27042/27043/17025, NIST and the FRE text were not fetched.
+contents and clauses 1–4); Légifrance refused automated access (CPP, Code civil and décret 2017-1416 read from
+the Pappers LEGI mirror). Pass 2 verified eIDAS (EUR-Lex consolidated text), the GDPR (gdpr-info.eu mirror and the
+Commission's adequacy page), the FRE text, SWGDE, the NIST CFTT page, ISO editions and ISO/IEC 17025:2017 clauses,
+and the UK FSR Code v2. Still **to be verified**: ISO/IEC 27037 clauses 5–7 body text and 27041/27042 clause
+text (paywalled); Daubert/Kumho citations; CPP art. 427, Code civil art. 1358, CPC arts. 16, 233, 237, 238, 276;
+loi Informatique et Libertés art. 46 and Directive 2016/680 applicability; NIST FIPS 180-4/202; Decreto
+2364/2012, RNBD thresholds, CSJ penal 29.877, C-604/16 and the CGP art. 226 look-back periods; the ANSSI PRIS
+content.
 
 ### Tool features referred to in the tables
 
@@ -62,8 +68,8 @@ GDPR, ISO 27041/27042/27043/17025, NIST and the FRE text were not fetched.
 | F9 | Declared limitations, printed in every report | `LIMITATIONS` in [src/core/src/report/mod.rs](../src/core/src/report/mod.rs); [i18n/en.json](../i18n/en.json) (`limitations`) |
 | F10 | Known-answer self-test (hash algorithms only) | `rv-pdfauth self-test` |
 | F11 | Synthetic sample evidence with expected results | [examples/sample/](../examples/README.md): `expected_findings.json`, `expected_hashes.csv`; checked by [src/pdf/tests/samples.rs](../src/pdf/tests/samples.rs) |
-| F12 | Test oracles (independent tools) | [tests/oracle_pdf.py](../tests/oracle_pdf.py) (pikepdf/qpdf, pyHanko — **run manually**, not in CI); [tests/verify_chain.py](../tests/verify_chain.py) (in CI); Python `hashlib`/`blake3` for the sample hashes |
-| F13 | Fuzzing and malformed-input tests | [fuzz/fuzz_targets/analyze.rs](../fuzz/fuzz_targets/analyze.rs) (**run manually**); [src/pdf/tests/no_panic.rs](../src/pdf/tests/no_panic.rs) (in CI); `crash.pdf` sample |
+| F12 | Test oracles (independent tools) | [tests/oracle_pdf.py](../tests/oracle_pdf.py) (pikepdf/qpdf, pyHanko — CI job `oracle` on every push, a disagreement fails the build); [tests/verify_chain.py](../tests/verify_chain.py) (in CI); Python `hashlib`/`blake3` for the sample hashes |
+| F13 | Fuzzing and malformed-input tests | [fuzz/fuzz_targets/analyze.rs](../fuzz/fuzz_targets/analyze.rs) (`.github/workflows/fuzz.yml`, nightly, 10 min); [src/pdf/tests/no_panic.rs](../src/pdf/tests/no_panic.rs) (in CI); `crash.pdf` sample |
 | F14 | CI on Windows and Linux | [.github/workflows/ci.yml](../.github/workflows/ci.yml) |
 | F15 | SBOM and build provenance | [.github/workflows/release.yml](../.github/workflows/release.yml) (CycloneDX, `actions/attest-build-provenance`) |
 | F16 | Versioned releases with `SHA256SUMS` | [.github/workflows/release.yml](../.github/workflows/release.yml); [installation.md](installation.md#2-verify-the-download) |
@@ -118,20 +124,20 @@ flowchart TB
 
 Courts in all four traditions ask, in different words, whether the method is **reliable** and whether it was
 **reliably applied** in this case. Colombia's Ley 906 art. 422 lists Daubert-like criteria ([V]); France leaves
-evidence free but weighs it; ISO/IEC 27041 (to be verified) asks for validation before use and verification by
-each user; the US FRE 702 (2023 amendment, [S]) and Daubert/Kumho (to be verified) give the vocabulary opposing
+evidence free but weighs it; ISO/IEC 17025 §7.2 ([V]; 27041 clause text to be verified) asks for validation before use and verification by
+each user; the US FRE 702 (2023 amendment, [V]) and Daubert/Kumho (to be verified) give the vocabulary opposing
 experts use.
 
 | Factor | What RV PDFAuth offers (evidence an examiner can show) | Status |
 | --- | --- | --- |
 | **Testability** — can the method be tested? | Deterministic outputs ([theory.md B17](theory.md#b17-determinism-and-reproducibility)); 7 synthetic samples with expected findings (F11); unit and integration tests run on Windows and Linux (F14); malformed-input tests (F13); byte-exact revisions anyone can re-derive with `head -c` or PowerShell ([theory.md B5](theory.md#b5-revision-extraction-byte-exact-prefixes)) | met |
-| **Known or potential error rate, and limits** | Every finding states what it does not prove (F8); 9 limitations in every report (F9); thresholds published ([theory.md B1](theory.md#b1-source-map-and-constants)). **No measured false-positive / false-negative rates** on a labelled corpus (G5) | partial |
-| **Peer review / independent oracles** | Source auditable (F17); oracles pikepdf/qpdf and pyHanko (F12, manual); independent chain verifier in Python (CI); OpenSSL for timestamps. No publication or external review (G7); oracles and fuzzing not in CI (G21) | partial |
+| **Known or potential error rate, and limits** | Every finding states what it does not prove (F8); 9 limitations in every report, plus item-specific ones such as `VISUAL_DIFF_UNAVAILABLE` (F9); thresholds published ([theory.md B1](theory.md#b1-source-map-and-constants)). **No measured false-positive / false-negative rates** on a labelled corpus (G5) | partial |
+| **Peer review / independent oracles** | Source auditable (F17); oracles pikepdf/qpdf and pyHanko (F12, CI); independent chain verifier in Python (CI); nightly fuzzing (F13); OpenSSL for timestamps. No publication or external review (G7) | partial |
 | **Standards controlling the operation** | ISO 32000-1 file model for revisions; RFC 3161, RFC 5652, FIPS 180-4/202 for cryptography; release verification ([installation.md](installation.md)); examiner checklist (below). No enforced hash policy (G11); no formal SOP signed by the firm | partial |
 | **General acceptance** | Hashing and incremental-update analysis are standard practice; results agree with established parsers on the samples (F12). Acceptance of the producer-fingerprint method is not demonstrated (G5, G7) | partial |
-| **Validation for intended use** (ISO/IEC 27041, 17025 §7.2.2 — to be verified) | Inputs exist (F10–F14) but there is **no per-release validation report** with plan, acceptance criteria, results and sign-off (G6) | gap |
-| **Verification by the user** before casework (27041 — to be verified) | `self-test` (hashes) + sample run with known expected summary ([installation.md](installation.md#7-first-run-self-test-and-sample)) | met |
-| **Reliable application in this case** (FRE 702(d), 2023 — [S]) | Every step of the run in the audit chain (F3), environment pinned (F4), PDFium and fingerprint DB digests per item, timestamp (F5), signed report (F6) | met |
+| **Validation for intended use** (17025 §7.2.2 [V]; ISO/IEC 27041 — to be verified) | Inputs exist (F10–F14) but there is **no per-release validation report** with plan, acceptance criteria, results and sign-off (G6) | gap |
+| **Verification by the user** before casework (17025 §7.2.1 [V title]; 27041 — to be verified) | `self-test` (hashes) + sample run with known expected summary ([installation.md](installation.md#7-first-run-self-test-and-sample)) | met |
+| **Reliable application in this case** (FRE 702(d), 2023 — [V]) | Every step of the run in the audit chain (F3), environment pinned (F4), PDFium and fingerprint DB digests per item, timestamp (F5), signed report (F6) | met |
 
 ## 4. Colombia
 
@@ -218,7 +224,7 @@ Judicial cartilla. Both read via Fiscalía PDFs ([S]: AI-summarised extraction �
 | --- | --- | --- | --- | --- |
 | CO-F1 | Nine validity requirements: autenticidad, capacidad demostrativa, identidad, integridad, preservación, seguridad, almacenamiento, continuidad, registro | Manual 2018 §5.3.1–5.3.9 [S]; older manual (integridad, continuidad, autenticidad, identidad, registro) [S] | identidad, integridad: F2; continuidad, registro: F3, F7; preservación: F1; seguridad, almacenamiento: examiner | met / examiner |
 | CO-F2 | One Registro de Cadena de Custodia per EMP/EF, a single original, accompanying it to final disposal | Manual 2018 §6 [S]; older manual p. 63 [S] | F7 per item, but a "Fiscalía-style" internal record, not the official form | partial (G9) |
-| CO-F3 | Minimum fields: entry/exit date, NUNC, EMP/EF identifier, description, handover parties, ID document type and number | Manual 2018 §7.3 [S] | F7 has NUNC (case ID), description, transfer rows with date/time and "name, ID"; EMP/EF code is generated (`<RUN-ID>-<index>`), not the official one; **no ID-type field** | partial (G9) |
+| CO-F3 | Minimum fields: entry/exit date, NUNC, EMP/EF identifier, description, handover parties, ID document type and number | Manual 2018 §7.3 [S] | F7 has NUNC (case ID), description, transfer rows with date/time and "name, position, ID type and number, signature"; a persons table (examiner, assistants, witnesses: name, position (*cargo*), ID type, ID number, signature) filled in by hand; EMP/EF code is generated (`<RUN-ID>-<index>`), not the official one | partial (G9) |
 | CO-F4 | Label (*rótulo*) filled separately, never on the item; year-month-day; 00:00–24:00; legible, no erasures | Manual 2018 §8.1.5 [S]; older manual pp. 52–53 [S] | F7 dates in ISO 8601 UTC, 24-hour; no separate label output | partial / examiner (physical) |
 | CO-F5 | Receiver inspects the container; normally only the designated perito opens it; other openings documented | Manual 2018 §6 [S]; older manual pp. 67–68 [S] | F2 re-hash; F3 logs each run | met / examiner |
 | CO-F6 | Private entities with their own custody procedures follow the manual; provisional delivery to the defence needs written authorisation | Manual 2018 §2, §6 [S] | F7 | examiner |
@@ -282,7 +288,7 @@ verified (to be verified; G14).
 
 | # | Requirement | Source | How rv-pdfauth meets it | Status |
 | --- | --- | --- | --- | --- |
-| FR-P1 | Data seized as the medium or a copy made in the presence of those attending | Art. 56 al. 5 (loi 2024-582, in force 26-06-2024) [V]; art. 97 (loi 2019-222) [V] | F2 hash of the copy; F7 FR form has transfer rows but **no field for witnesses present** | partial (G9) |
+| FR-P1 | Data seized as the medium or a copy made in the presence of those attending | Art. 56 al. 5 (loi 2024-582, in force 26-06-2024) [V]; art. 97 (loi 2019-222) [V] | F2 hash of the copy; F7 FR form has transfer rows and a persons table with witness rows (name, *qualité*, ID document, signature) filled in by hand | partial (G9) |
 | FR-P2 | Seized items immediately inventoried and sealed (provisional closed seals if needed) | Art. 56 al. 4 [V]; art. 97 [V] | F7 "Seal number" (generated) and description | examiner (OPJ/JI act); F7 internal record |
 | FR-P3 | Seals opened in the presence of the *personne mise en examen* and their lawyer (with exceptions) | Art. 97 [V] | F3 logs each run (each opening of the copy) | examiner |
 | FR-P4 | Qualified person opens seals and copies data "sans porter atteinte à leur intégrité", reporting under arts. 163, 166 | Art. 60-3 (loi 2023-22, in force 26-01-2023) [V] | F1, F2, F3, F6 | met |
@@ -291,7 +297,7 @@ verified (to be verified; G14).
 | FR-P7 | Experts from the national or cour d'appel lists (loi 71-498); others exceptionally, by reasoned decision | Art. 157 (loi 2004-130) [V] | None | gap for Rakvor experts not yet listed (G8) |
 | FR-P8 | Non-listed experts take the loi 71-498 oath at each appointment | Art. 160 [V] | None | examiner |
 | FR-P9 | Experts may open and re-seal; must mention it in the report after inventory | Art. 163 al. 2 (loi 2016-731) [V] | F7 FR form (transfer rows, condition of packaging); F3 | partial (no explicit open/re-seal fields) |
-| FR-P10 | Report describes operations and conclusions, is signed, names qualified assistants; divergent opinions reasoned; report and seals deposited with the clerk | Art. 166 (loi 2003-239) [V] (the old "attester avoir personnellement accompli" wording applied 1986–2003 only) | F6 signed report; F3 operations; F4 operator; **no "assistants" field** in the templates | partial |
+| FR-P10 | Report describes operations and conclusions, is signed, names qualified assistants; divergent opinions reasoned; report and seals deposited with the clerk | Art. 166 (loi 2003-239) [V] (the old "attester avoir personnellement accompli" wording applied 1986–2003 only) | F6 signed report; F3 operations; F4 operator; assistant rows in the custody form's persons table (the technical report itself has no assistants field) | partial |
 | FR-P11 | Parties receive conclusions and may request a "complément d'expertise ou de contre-expertise" (period ≥ 15 days) | Art. 167 [S] | F11, F12, F16, F17 make counter-expertise reproducible | met (support) |
 | FR-P12 | At trial, experts swear to assist justice "en leur honneur et en leur conscience" | Art. 168 [S] | F6, F9 | examiner |
 | FR-P13 | Results of technical operations under arts. 230-1 ff. come with an attestation "certifiant la sincérité des résultats transmis" | Art. 230-3 [S] (CC 2022-987 QPC) | F6 | context |
@@ -301,65 +307,75 @@ verified (to be verified; G14).
 
 Context: C. civ. art. 1366 makes an electronic writing equal to paper "sous réserve que puisse être dûment
 identifiée la personne dont il émane et qu'il soit établi et conservé dans des conditions de nature à en garantir
-l'intégrité" ([S], via CMS). Art. 1367 al. 2 requires "l'usage d'un procédé fiable d'identification garantissant
-son lien avec l'acte", presumed reliable "jusqu'à preuve contraire" under decree conditions ([S], via Centre
-Inffo). Décret 2017-1416 limits the presumption to **qualified** electronic signatures (eIDAS arts. 26, 28, 29)
-(**to be verified**: Légifrance unreachable). Cass. 1re civ., 7 Oct. 2020, n° 19-18.135: a signature electronic
-under eIDAS but not reliable under art. 1367 did not create a valid electronic writing ([S], via CMS). Arts. 1368
-and 1358, and CPC arts. 233, 237, 238, 263–284-1, 145: **to be verified**.
+l'intégrité" [V] (Pappers LEGIARTI000032042461). Art. 1367 al. 2 requires "l'usage d'un procédé fiable
+d'identification garantissant son lien avec l'acte auquel elle s'attache", presumed reliable "jusqu'à preuve
+contraire" under decree conditions [V] (LEGIARTI000032042456). Décret 2017-1416 art. 1 limits the presumption to a
+**qualified** electronic signature (eIDAS arts. 26, 28, 29) [V] (Pappers JORFTEXT000035676246). Art. 1368: "le juge
+règle les conflits de preuve par écrit en déterminant par tout moyen le titre le plus vraisemblable" [V].
+Cass. 1re civ., 7 Oct. 2020, n° 19-18.135: a signature electronic under eIDAS but not reliable under art. 1367
+did not create a valid electronic writing ([S], via CMS). Art. 1358 and CPC arts. 16, 233, 237, 238, 263–284-1,
+145, 276: **to be verified**.
 
 | # | Requirement | Source | How rv-pdfauth meets it | Status |
 | --- | --- | --- | --- | --- |
-| FR-C1 | Electronic writing has probative force only if the author is identifiable and integrity is guaranteed (applies to Rakvor's reports and to the PDFs examined) | C. civ. art. 1366 [S] | Reports: F6 (identity), F2, F3, F5 (integrity). Examined PDFs: signals (F8) | met / partial |
-| FR-C2 | Reliable identification process linked to the act; presumption needs decree conditions | C. civ. art. 1367 al. 2 [S] | F6 (CMS, examiner certificate) | partial — no presumption (G3) |
-| FR-C3 | Presumption only for qualified electronic signatures (eIDAS arts. 26, 28, 29) | Décret 2017-1416 art. 1 — **to be verified** | F6 is not a QES unless a qualified certificate on a QSCD is used (RSA `.p12` files only today) | gap (G3) |
+| FR-C1 | Electronic writing has probative force only if the author is identifiable and integrity is guaranteed (applies to Rakvor's reports and to the PDFs examined) | C. civ. art. 1366 [V] | Reports: F6 (identity), F2, F3, F5 (integrity). Examined PDFs: signals (F8) | met / partial |
+| FR-C2 | Reliable identification process linked to the act; presumption needs decree conditions | C. civ. art. 1367 al. 2 [V] | F6 (CMS, examiner certificate) | partial — no presumption (G3) |
+| FR-C3 | Presumption only for qualified electronic signatures (eIDAS arts. 26, 28, 29) | Décret 2017-1416 art. 1 [V] | F6 is not a QES unless a qualified certificate on a QSCD is used (RSA `.p12` files only today) | gap (G3) |
 | FR-C4 | Technician acts personally, objectively, impartially; no legal assessment | CPC arts. 233, 237, 238 — **to be verified** | F8 (no legal verdict); F4 records the operator | met (support) / examiner |
 | FR-C5 | Adversarial principle: parties can discuss the technical bases | CPC arts. 16, 276 — **to be verified** | F17, F11, F12; [theory.md](theory.md) | met (support) |
 
 ### 5.3 eIDAS — Regulation (EU) 910/2014 as amended by (EU) 2024/1183
 
-Not fetched in the research: article content is **to be verified** (art. 41's existence and placement in
-Chapter III §6 confirmed by search, UK retained copy). Whether arts. 41–42 changed in substance with 2024/1183 is
-**to be verified** against the consolidated EUR-Lex text.
+Verified [V] against the EUR-Lex consolidated text CELEX 02014R0910-20241018 (amended by Directive (EU)
+2022/2555 and Regulation (EU) 2024/1183; corrigendum of 9.4.2025). Changes by 2024/1183 that matter here:
+**art. 25(3) and art. 41(3) are deleted**; art. 26 gained a paragraph 2 (implementing acts); **art. 42 gained
+paragraph 1a** — compliance with art. 42(1) "shall be presumed where the binding of date and time to data and the
+accuracy of the time source comply with the standards" listed under art. 42(2), which Commission Implementing
+Regulation (EU) **2025/1929** of 29 Sept. 2025 establishes ([S]: title and date; its annex was not read — **to be
+verified**).
 
-What an RFC 3161 timestamp from a **non-qualified** TSA does and does not give (legal analysis **to be verified**,
-for counsel):
+What an RFC 3161 timestamp from a **non-qualified** TSA does and does not give (legal analysis for counsel; the
+quoted article text is [V]):
 
 - **Gives:** cryptographic proof that the audit chain head existed no later than the TSA time, signed by the TSA
   key; under art. 41(1) it "shall not be denied legal effect and admissibility … solely on the grounds that it is
   in electronic form or that it does not meet the requirements of the qualified electronic time stamp". With F3,
   every entry up to the covered one existed by then and was not changed afterwards (assuming SHA-256 collision
   resistance).
-- **Does not give:** the art. 41(2) presumption of accuracy of date/time and integrity (qualified ETS from a QTSP
-  on an EU Trusted List, art. 42); any statutory status in Colombia (Ley 527 art. 30 #5); proof of anything
+- **Does not give:** the art. 41(2) presumption "of the accuracy of the date and the time it indicates and the
+  integrity of the data to which the date and time are bound" (qualified ETS from a QTSP on an EU Trusted List
+  meeting art. 42; compliance with art. 42(1) presumed under art. 42(1a) when the CIR 2025/1929 standards are met); any statutory status in Colombia (Ley 527 art. 30 #5); proof of anything
   before intake; proof of when individual entries were written (only the head is stamped).
 - **Consequence:** Rakvor carries the burden of showing the TSA's reliability: policy OID, clock source,
-  certificate chain and revocation at stamping time. `verify-log` does **not** check these (G18): run the OpenSSL
-  check in the [checklist](#examiner-checklist-before-filing-a-report).
+  certificate chain and revocation at stamping time. `verify-log` checks the TSA signature and, with `--tsa-ca`,
+  the chain; it does **not** check revocation, policy or accuracy (G18): run the OpenSSL check in the
+  [checklist](#examiner-checklist-before-filing-a-report).
 
 | # | Requirement | Source | How rv-pdfauth meets it | Status |
 | --- | --- | --- | --- | --- |
-| EU-1 | Electronic signature not denied effect solely for being electronic or non-qualified; QES equals handwritten | eIDAS art. 25(1)–(2) — **to be verified** | F6 | context |
-| EU-2 | Advanced e-signature: uniquely linked, identifies, sole control, detects changes | eIDAS art. 26 — **to be verified** | F6 (CMS over the PDF byte range; any change is detectable); sole control of the key is the examiner's (hardware token recommended; today the key comes from a `.p12` file) | met technically if the key is controlled; not qualified |
-| EU-3 | Time stamp not denied effect solely because it is not qualified | eIDAS art. 41(1) — **to be verified** | F5 | met (no presumption) |
-| EU-4 | Qualified time stamp: presumption of accurate date/time and integrity | eIDAS art. 41(2) — **to be verified** | F5 with a non-qualified TSA (default DigiCert URL) | gap (G2) |
-| EU-5 | Qualified ETS: binds date/time to preclude undetectable change, UTC-linked source, QTSP advanced signature or seal | eIDAS art. 42(1) — **to be verified** | F5 pointed at a QTSP's TSA with `--tsa-url` | gap (configure a QTSP) |
-| EU-6 | QES validation checks the qualified certificate, provider status, signature and time | eIDAS art. 32 — **to be verified** | rv-pdfauth signature checks: no trust-chain or EU Trusted List validation | gap (G4) |
+| EU-1 | Electronic signature not denied effect solely for being electronic or non-qualified; QES equals handwritten | eIDAS art. 25(1)–(2) [V]; art. 25(3) deleted by 2024/1183 [V] | F6 | context |
+| EU-2 | Advanced e-signature: uniquely linked, identifies the signatory, created with data under their sole control "with a high level of confidence", changes detectable | eIDAS art. 26(a)–(d) [V] | F6 (CMS over the PDF byte range; any change is detectable); sole control of the key is the examiner's (hardware token recommended; today the key comes from a `.p12` file) | met technically if the key is controlled; not qualified |
+| EU-3 | Time stamp not denied effect solely because it is not qualified | eIDAS art. 41(1) [V] | F5 | met (no presumption) |
+| EU-4 | Qualified time stamp: presumption of accurate date/time and integrity | eIDAS art. 41(2) [V]; art. 41(3) deleted by 2024/1183 [V] | F5 with a non-qualified TSA (default DigiCert URL) | gap (G2) |
+| EU-5 | Qualified ETS: binds date/time so as to reasonably preclude undetectable change, accurate UTC-linked time source, QTSP advanced signature or seal; compliance presumed when the CIR 2025/1929 standards are met | eIDAS art. 42(1)(a)–(c) and (1a) [V]; CIR (EU) 2025/1929 [S] | F5 pointed at a QTSP's TSA with `--tsa-url` | gap (configure a QTSP) |
+| EU-6 | QES validation confirms a qualified certificate valid at signing from a qualified provider, matching validation data, intact signed data, QSCD and art. 26 at signing | eIDAS art. 32(1)(a)–(h) [V] | rv-pdfauth signature checks: no trust-chain or EU Trusted List validation | gap (G4) |
 
 ### 5.4 GDPR (Regulation (EU) 2016/679) and loi Informatique et Libertés
 
-All rows **to be verified** (not fetched): a standard reading for counsel to confirm.
+GDPR article text verified [V] against gdpr-info.eu (a faithful reproduction of the OJ text); the adequacy list
+against the European Commission's page (checked 21-10-2026). The application to forensic work is a reading for
+counsel to confirm.
 
 | # | Requirement | Source | How rv-pdfauth meets it | Status |
 | --- | --- | --- | --- | --- |
-| EU-D1 | Lawful basis (usually legitimate interest or legal obligation of the client) | GDPR art. 6(1) — **to be verified** | None | examiner |
-| EU-D2 | Special categories only under an exception, e.g. legal claims | GDPR art. 9(2)(f) — **to be verified** | None | examiner |
-| EU-D3 | Offence data processed by private parties only where national law allows (France: LIL art. 46, e.g. to prepare, bring and follow legal action) | GDPR art. 10; loi 78-17 art. 46 — **to be verified** | None | examiner (lawyer review) |
-| EU-D4 | Data minimisation and storage limitation | GDPR art. 5(1)(c), (e) — **to be verified** | F1 avoids copies of the evidence, but outputs (revisions, embedded files, objects dump) contain evidence content; switch them off when not needed (`--revisions none`, `--extract-embedded off`, `--objects-dump off`); no retention tooling | gap (G13) / examiner |
-| EU-D5 | Processor contract with the client | GDPR art. 28 — **to be verified** | None | examiner |
-| EU-D6 | Security, 72-hour breach notification, records of processing, DPIA where high risk | GDPR arts. 32, 33, 30, 35 — **to be verified** | F3 access trail; local processing, no telemetry | met (tool) / examiner |
-| EU-D7 | Data protection by design and by default | GDPR art. 25 — **to be verified** | Local, no telemetry; only a hash leaves the machine (optional timestamp); F1 | met |
-| EU-D8 | Third-country transfers; Colombia has no EU adequacy decision (as of Oct 2026 — **to be verified**), so SCCs or another art. 46 tool | GDPR arts. 44–49 — **to be verified** | Local processing | examiner |
+| EU-D1 | Lawful basis (usually legitimate interest or legal obligation of the client) | GDPR art. 6(1)(c), (e), (f) [V] | None | examiner |
+| EU-D2 | Special categories only under an exception, e.g. "establishment, exercise or defence of legal claims" | GDPR art. 9(2)(f) [V] | None | examiner |
+| EU-D3 | Offence data processed only "under the control of official authority" or where "authorised by Union or Member State law" with safeguards (France: LIL art. 46) | GDPR art. 10 [V]; loi 78-17 art. 46 — **to be verified** | None | examiner (lawyer review) |
+| EU-D4 | Data minimisation ("limited to what is necessary") and storage limitation | GDPR art. 5(1)(c), (e) [V] | F1 avoids copies of the evidence, but outputs (revisions, embedded files, objects dump) contain evidence content; switch them off when not needed (`--revisions none`, `--extract-embedded off`, `--objects-dump off`); no retention tooling | gap (G13) / examiner |
+| EU-D5 | Processor contract with the client (instructions, confidentiality, security, sub-processors, deletion or return, audits) | GDPR art. 28(3)(a)–(h) [V] | None | examiner |
+| EU-D6 | Security "appropriate to the risk", breach notification "not later than 72 hours", records of processing, DPIA where high risk | GDPR arts. 32(1), 33(1)–(2), 30, 35(1), 35(3)(b) [V] | F3 access trail; local processing, no telemetry | met (tool) / examiner |
+| EU-D7 | Data protection by design and by default | GDPR art. 25 [V] (title) | Local, no telemetry; only a hash leaves the machine (optional timestamp); F1 | met |
+| EU-D8 | Third-country transfers: **Colombia is not on the Commission's adequacy list** (16 countries and territories, checked 21-10-2026), so standard contractual clauses or another art. 46 safeguard are needed for transfers from France to Colombia | GDPR art. 46(1), 46(2)(c) [V]; Commission adequacy page [V] | Local processing | examiner |
 | EU-D9 | Acting for a judicial authority in criminal matters may fall under the Law Enforcement Directive (LIL Title III) | Directive (EU) 2016/680 — **to be verified** | None | examiner (lawyer review) |
 
 ### 5.5 ANSSI
@@ -385,7 +401,7 @@ operator, etc.)"; 3.25 verification function: "No two non-identical data sets sh
 | --- | --- | --- | --- | --- |
 | ISO-1 | Auditability: an independent assessor can evaluate every action | §5.3.2 [V title / S content] | F3 + `verify-log` + [tests/verify_chain.py](../tests/verify_chain.py); F4; F6 | met |
 | ISO-2 | Repeatability: same results, same environment | §3.17 [V]; §5.3.3 | F10, F11; deterministic outputs; F4 pins the environment | met |
-| ISO-3 | Reproducibility: different environment and operator | §3.18 [V]; §5.3.4 | Hashes and chain: F12 (Python, in CI), F14 (Windows + Linux). PDF analysis: oracles run manually (G21); releases not bit-reproducible (G22) | met (hashes, chain) / partial (PDF analysis) |
+| ISO-3 | Reproducibility: different environment and operator | §3.18 [V]; §5.3.4 | Hashes and chain: F12 (Python, in CI), F14 (Windows + Linux). PDF analysis: oracles in CI (F12); releases not bit-reproducible (G22) | met (hashes, chain) / partial (PDF analysis) |
 | ISO-4 | Justifiability: each decision and method documented and justified | §5.3.5 [V title / S content] | F8, F9; [theory.md](theory.md); method-selection rationale belongs in the examiner's report | partial |
 | ISO-5 | A copy includes verification means, embedded or independent | §3.6 [V] | F2 hashes stored with each copy and each output; F3; independent verifier | met |
 | ISO-6 | Verification function must not match non-identical data (collision-resistant) | §3.25 [V] (MD5, SHA-1 cited only as examples) | F2 allows `md5,sha1` with no SHA-2/3 algorithm | gap (G11) |
@@ -395,72 +411,75 @@ operator, etc.)"; 3.25 verification function: "No two non-identical data sets sh
 | ISO-10 | Competency of DEFR and DES | §3.7–3.8 [V]; §6.4 [V title] | None | examiner |
 | ISO-11 | Acquisition procedures for computers and media | §7.1.3 [V title] | Not an imager; intake by rv-hashinv | partial (scope, G15) |
 
-### 6.2 ISO/IEC 27041, 27042, 27043 (2015), ISO 21043, ISO/IEC 17025:2017, ILAC G19
+### 6.2 ISO/IEC 27041, 27042, 27043 (2015), ISO 21043, ISO/IEC 17025:2017, Global ACI-TECH-1-004 (formerly ILAC G19)
 
-Not read in the research; editions from professional knowledge — **to be verified** on iso.org.
-ISO/IEC 27041:2015 (assurance that methods are suitable: validation for intended use, verification by each user,
-validation records, re-validation after change); 27042:2015 (analysis and interpretation: competence,
-reproducible analysis, limitations and alternative explanations); 27043:2015 (investigation principles and
-processes); ISO 21043 parts 1–5 (forensic sciences, relevance to digital confirmed by search titles); ISO/IEC
-17025:2017 clause numbers (6.2, 6.4, 6.5, 7.2.2, 7.5, 7.6, 7.7, 7.8, 7.11) **to be verified**; ILAC G19:06/2022
-(version confirmed by search; a UKAS bulletin of 2026-08-17 suggests a newer development — **to be verified**).
+Editions and statuses verified [V] on iso.org: ISO/IEC 27041:2015 (assurance that methods are fit for purpose),
+27042:2015 (analysis and interpretation: continuity, validity, reproducibility, repeatability) and 27043:2015
+(investigation principles and processes) — their clause text is paywalled and remains **to be verified**; ISO 21043
+parts 1–5 (2018/2025 editions, [S]). ISO/IEC 17025:2017 clause titles verified [V] from a public copy (6.2, 6.4,
+6.5, 7.2.1, 7.2.2, 7.5, 7.6, 7.7, 7.8, 7.11, 8.3, 8.4); §6.4.13 requires equipment records to include "the identity
+of equipment, including software and firmware version" [V]. **ILAC G19:06/2022 was withdrawn in June 2026** and
+replaced, without substantive change, by **Global ACI-TECH-1-004 (G) *Modules in a Forensic Science Process***
+after ILAC and IAF merged into Global ACI on 1-1-2026 ([S], UKAS Technical Bulletin 2026-08-17).
 
 | # | Requirement | Source | How rv-pdfauth meets it | Status |
 | --- | --- | --- | --- | --- |
-| ISO-12 | Validate methods for intended use before use, against documented criteria; keep the record | 27041; 17025:2017 §7.2.2 — **to be verified** | F10–F14 produce evidence; **no formal per-release validation report** | gap (G6) |
-| ISO-13 | Re-validate after any change to the tool or its dependencies | 27041; 17025 §7.11 — **to be verified** | F14 CI; F15 SBOM shows dependency change; F4 per run; F16 | partial (G6) |
-| ISO-14 | Verification by the user before casework | 27041 — **to be verified** | `self-test` (hashes) + sample run ([installation.md](installation.md#7-first-run-self-test-and-sample)) | met |
-| ISO-15 | Interpretation states limitations and alternative explanations | 27042; ISO 21043-4 — **to be verified** | F8 ("does not prove" = alternative explanations), F9 | met |
-| ISO-16 | Technical records sufficient to repeat the work | 17025 §7.5 — **to be verified** | F3, F4, F16; hashed outputs | met |
-| ISO-17 | Measurement uncertainty / error characterisation where relevant (e.g. fingerprint confidence) | 17025 §7.6 — **to be verified** | Not measured | gap (G5) |
-| ISO-18 | Accreditation of the laboratory scope (COFRAC, ONAC) | 17025; ILAC G19 — **to be verified** | None | gap (G1) |
+| ISO-12 | Validate methods for intended use before use, against documented criteria; keep the record, incl. "a statement on the validity of the method" | 17025:2017 §7.2.2.1, §7.2.2.4 [V]; 27041 clauses — **to be verified** | F10–F14 produce evidence; **no formal per-release validation report** | gap (G6) |
+| ISO-13 | Re-validate after any change to the tool or its dependencies (software changes "authorized, documented and validated before implementation") | 17025 §7.11.2, §7.2.2.2 [V]; 27041 — **to be verified** | F14 CI; F15 SBOM shows dependency change; F4 per run; F16 | partial (G6) |
+| ISO-14 | Verification by the user before casework | 17025 §7.2.1 [V title]; 27041 clauses — **to be verified** | `self-test` (hashes) + sample run ([installation.md](installation.md#7-first-run-self-test-and-sample)) | met |
+| ISO-15 | Interpretation states limitations and alternative explanations | 27042 abstract [V]; clause text and ISO 21043-4 — **to be verified** | F8 ("does not prove" = alternative explanations), F9 | met |
+| ISO-16 | Technical records sufficient to repeat the work; equipment records include the software and firmware version | 17025 §7.5 [V title]; §6.4.13 [V] | F3, F4, F16; hashed outputs | met |
+| ISO-17 | Measurement uncertainty / error characterisation where relevant (e.g. fingerprint confidence) | 17025 §7.6 [V title] | Not measured | gap (G5) |
+| ISO-18 | Accreditation of the laboratory scope (COFRAC, ONAC) | 17025:2017 [V]; Global ACI-TECH-1-004, formerly ILAC G19 [S] | None | gap (G1) |
 
 ## 7. United States and United Kingdom
 
 Context: none of these binds a Colombian or French court; opposing experts still use them as the vocabulary of
-reliability, and Ley 906 art. 422 closely mirrors Daubert. **FRE 702** was amended effective 1 Dec. 2023
-(confirmed by search): the proponent must show "more likely than not" that (a)–(d) are met, and (d) now requires
-that the opinion "reflects a reliable application" of the methods. *Daubert v. Merrell Dow*, 509 U.S. 579 (1993)
-and *Kumho Tire v. Carmichael*, 526 U.S. 137 (1999): citations **to be verified**. **FRE 902(13)–(14)** took
-effect 1 Dec. 2017 (confirmed by search; wording **to be verified**). **SWGDE** documents confirmed by search
-(18-Q-001-2.1 of 2024-03-07 on testing tools; position on MD5/SHA1; error mitigation analysis of 2018-11-20);
-contents **to be verified**. **NIST CFTT** publishes tool specifications, assertions and test reports (content
-**to be verified**). **UK FSR Code of Practice**: the 2023 version is marked withdrawn; version 2 published
-20 May 2025 (confirmed by search); in-force date and digital scope **to be verified**.
+reliability, and Ley 906 art. 422 closely mirrors Daubert. **FRE 702** [V] (Cornell LII text): the proponent must
+show "more likely than not" that (a)–(d) are met; (d) requires that "the expert's opinion reflects a reliable
+application of the principles and methods to the facts of the case"; amendment effective 1 Dec. 2023 [S].
+**FRE 901(b)(9)** and **902(13)–(14)** [V] (902 amendments effective 1 Dec. 2017 [S]). *Daubert v. Merrell Dow*,
+509 U.S. 579 (1993) and *Kumho Tire v. Carmichael*, 526 U.S. 137 (1999): citations **to be verified**. **SWGDE**
+[V]: 18-Q-001-2.1 v2.1 (2024-03-07) on testing tools; 12-f-002 v1.0 (2019-09-29) on MD5/SHA1; Error Mitigation
+Analysis v2.0 (2018-11-20). **NIST CFTT** [V] (programme page): hashing and PDF analysis are not CFTT categories.
+**UK FSR Code of Practice v2** [V]: in force since 2 Oct. 2025, applies to FSA DIG 100; §24 requires methods to be
+fit for purpose and validated before implementation.
 
 | # | Requirement | Source | How rv-pdfauth meets it | Status |
 | --- | --- | --- | --- | --- |
-| US-1 | Opinion based on sufficient facts and data | FRE 702(b) — wording **to be verified** | F3 lists every input and output; F2 | met |
-| US-2 | Product of reliable principles and methods | FRE 702(c) | F10–F13 + a validation report (missing) | partial (G6) |
-| US-3 | Reliable application to the facts (2023 emphasis) | FRE 702(d), amended 2023 [S] | F3 each step; F4; F10 at installation; F8 (no overreach) | met |
+| US-1 | Opinion based on sufficient facts and data | FRE 702(b) [V] | F3 lists every input and output; F2 | met |
+| US-2 | Product of reliable principles and methods | FRE 702(c) [V] | F10–F13 + a validation report (missing) | partial (G6) |
+| US-3 | Reliable application to the facts (2023 emphasis) | FRE 702(d), amended 2023 [V] | F3 each step; F4; F10 at installation; F8 (no overreach) | met |
 | US-4 | Daubert: testability | Daubert — **to be verified** | F11, F13, F12 | met |
 | US-5 | Daubert: peer review and publication | Daubert | No publication of the methods or fingerprint DB | gap (G7) |
-| US-6 | Daubert: known or potential error rate | Daubert | Not measured for rv-pdfauth signals | gap (G5) |
+| US-6 | Daubert: known or potential error rate; SWGDE: "relying solely on error rates is insufficient" — document error sources and mitigations | Daubert (**to be verified**); SWGDE Error Mitigation Analysis v2.0 [V] | Not measured for rv-pdfauth signals | gap (G5) |
 | US-7 | Daubert: standards controlling operation | Daubert | F10, F16, the checklist below; hash policy (G11) | partial |
 | US-8 | Daubert: general acceptance | Daubert | F12 agreement with accepted tools (hashes vs standard utilities; PDF structure vs established parsers) | partial |
-| US-9 | Authentication by evidence that a process produces an accurate result | FRE 901(b)(9) — wording **to be verified** | F10, F11, F12 records | met |
-| US-10 | Self-authentication of copied data by digital identification (hash) via a qualified person's certification | FRE 902(14) [S] | F2; **no certification template** in the reports | partial (add template) |
-| US-11 | Self-authentication of records generated by an electronic process via certification | FRE 902(13) [S] | F6, F3; no certification template | partial (add template) |
-| US-12 | Tools tested against documented requirements, results retained, re-tested after updates | SWGDE 18-Q-001-2.1 (content **to be verified**); NIST CFTT (**to be verified**) | F10–F14, F16 | partial (G6) |
-| US-13 | Hash choice following community and NIST positions (MD5/SHA-1 practical collisions; BLAKE3 not NIST-approved, FIPS 180-4 / 202) | SWGDE MD5/SHA1 position (content **to be verified**); NIST FIPS (**to be verified**) | F2 (default sha256; no enforced policy) | gap (G11) |
-| UK-1 | Method validation and accreditation for regulated forensic science | FSR Code of Practice v2 (2025) — specifics **to be verified** | F10–F16 | gap (G1, G6) if UK work is in scope |
+| US-9 | Authentication by evidence that a process produces an accurate result | FRE 901(b)(9) [V] | F10, F11, F12 records | met |
+| US-10 | Self-authentication of copied data by digital identification (hash) via a qualified person's certification | FRE 902(14) [V]; 2017 note [S] | F2; **no certification template** in the reports | partial (add template) |
+| US-11 | Self-authentication of records generated by an electronic process via certification | FRE 902(13) [V] | F6, F3; no certification template | partial (add template) |
+| US-12 | Tools tested against documented requirements, results retained, re-tested after updates | SWGDE 18-Q-001-2.1 §4, §5.1.3, §5.6, §6, App. A [V]; NIST CFTT methodology [V] | F10–F14, F16 | partial (G6) |
+| US-13 | Hash choice following community and NIST positions (MD5/SHA-1 practical collisions; BLAKE3 not NIST-approved, FIPS 180-4 / 202) | SWGDE 12-f-002 v1.0 [V] (MD5 and SHA-1 acceptable for integrity verification; transition to SHA-2/SHA-3 recommended); NIST FIPS 180-4 / 202 — **to be verified** | F2 (default sha256; no enforced policy) | gap (G11) |
+| UK-1 | Method validation and accreditation for regulated forensic science | FSR Code v2 §24.1.1, §24.3.1, §24.3.7 [V]; Table 1 DIG 100 [V] | F10–F16 | gap (G1, G6) if UK work is in scope |
 
 ## Consolidated gap list
 
-G1–G17 come from the research note; G18–G26 were found while documenting the code of this commit.
+G1–G17 come from the research note; G18–G26 were found while documenting the code. A maintenance pass closed
+G18 (TSA signature and chain; revocation remains), G20, G21 (except a `pdfsig` oracle) and G25 in code or CI, and
+narrowed G9, G22, G23 and G26; each row states what remains.
 Owners: **Eng.** = engineering (tool), **Counsel**, **Examiner**, **Firm** = Rakvor management.
 
 | ID | Gap | Affected | Mitigation now | Remedy | Owner |
 | --- | --- | --- | --- | --- | --- |
-| G1 | No ISO/IEC 17025 accreditation (COFRAC/ONAC), no ILAC G19 scope (Ley 906 art. 275 lit. h names "laboratorios … oficialmente aceptados") | ISO-18, UK-1, US-7 | State "not accredited" in the report | Accreditation roadmap | Firm |
-| G2 | RFC 3161 TSA not qualified (no eIDAS 41(2) presumption) and not a Colombian ECD (Ley 527 art. 30 #5) | EU-4, EU-5, CO-L9 | `--tsa-url` to a QTSP (France) or an ONAC-accredited ECD (Colombia); record the TSA chain in the case file | Dual-stamp cross-border cases; record policy OID and chain in the output | Eng. + Counsel |
+| G1 | No ISO/IEC 17025 accreditation (COFRAC/ONAC), no scope aligned with Global ACI-TECH-1-004 (formerly ILAC G19, withdrawn June 2026) (Ley 906 art. 275 lit. h names "laboratorios … oficialmente aceptados") | ISO-18, UK-1, US-7 | State "not accredited" in the report | Accreditation roadmap | Firm |
+| G2 | RFC 3161 TSA not qualified (no eIDAS 41(2) presumption) and not a Colombian ECD (Ley 527 art. 30 #5) | EU-4, EU-5, CO-L9 | `--tsa-url` to an EU Trusted List QTSP (France; art. 42(1a) presumption via the CIR 2025/1929 standards) or an ONAC-accredited ECD (Colombia); record the TSA chain in the case file | Dual-stamp cross-border cases; record policy OID and chain in the output | Eng. + Counsel |
 | G3 | Reports signed with the examiner's own certificate: not a QES, not a Colombian *firma digital* with the art. 28 presumption | FR-C2, FR-C3, CO-L8, CO-L10 | Publish the certificate fingerprint (logged as `signing_certificate_loaded`) out of band | Support qualified certificates on a QSCD / ECD-issued certificates (today: RSA `.p12` only) | Eng. + Examiner |
 | G4 | No validation of signature trust chains (EU Trusted List, Colombian ECD roots, revocation, LTV) | EU-6, CO-P18 | Stated in F8/F9 (`SIGNATURE_PRESENT_TRUST_NOT_VERIFIED`); validate with Adobe Acrobat or pyHanko and attach the result | Implement trust validation | Eng. |
 | G5 | Unknown error rates and coverage of producer fingerprints and other signals | CO-P15, CO-P16, CO-J8, ISO-17, US-6 | Present fingerprints as signals only; disclose the DB (`fingerprints export`) | Labelled corpus; publish FP/FN rates per signal and release; DB coverage | Eng. |
 | G6 | No per-release validation record (plan, criteria, results, limitations, sign-off), no re-validation trigger | ISO-12, ISO-13, US-2, US-12, CO-P14, CO-C6 | Keep CI logs and the sample run of the installed version with the case | CI-generated, signed `validation-report` per tag, listed in SHA256SUMS | Eng. + Firm |
 | G7 | No peer-reviewed publication or external review of the methods | CO-P16, US-5, CO-P15 | Offer source review to opposing experts | White paper; external review under NDA | Firm |
-| G8 | Examiner status: not on French lists, oath per appointment; Colombian *certificado de idoneidad* and CGP art. 226 disclosures | FR-P5, FR-P7, FR-P8, CO-P11, CO-P12, CO-C3 | Examiner prepares these documents | Add CGP art. 226 #1–10 and CPP art. 166 fields (incl. assistants) to the templates | Examiner + Eng. |
-| G9 | F7 are "style" forms, not the official Fiscalía *Registro*; French scellés are created by OPJ/judge/clerk. Missing fields: position (cargo), ID type, witnesses present, official EMP/EF code, seal opening/re-sealing | CO-F2, CO-F3, CO-P3, FR-P1, FR-P2, FR-P9 | Label F7 as an internal custody record; use the official forms alongside | Add the missing fields; map to the official forms | Eng. + Counsel |
+| G8 | Examiner status: not on French lists, oath per appointment; Colombian *certificado de idoneidad* and CGP art. 226 disclosures | FR-P5, FR-P7, FR-P8, CO-P11, CO-P12, CO-C3 | Examiner prepares these documents | Add CGP art. 226 #1–10 and CPP art. 166 fields to the technical report (assistants are in the custody form) | Examiner + Eng. |
+| G9 | F7 are "style" forms, not the official Fiscalía *Registro*; French scellés are created by OPJ/judge/clerk. Position (*cargo* / *qualité*), ID type and number, witnesses and assistants now have blank fields in the form (HTML/PDF, both jurisdictions) and nullable fields in `custody.json`; still missing: official EMP/EF code, seal opening/re-sealing | CO-F2, CO-F3, CO-P3, FR-P1, FR-P2, FR-P9 | Label F7 as an internal custody record; use the official forms alongside | Map to the official forms; seal fields | Eng. + Counsel |
 | G10 | F1 is software read-only, not a hardware write-blocker (Raúl Reyes / INTERPOL precedent) | CO-J7, ISO-7 | Work only on images or write-blocked devices; record blocker model, serial and test in the case notes | Record write-blocker details in F3 (case folder) | Examiner + Eng. |
 | G11 | Hash policy allows md5/sha1-only pairs; BLAKE3/SHA3 less familiar to courts | ISO-6, US-13 | Always select `sha256` (or `sha512`) as one of the two (checklist) | Require SHA-256/512 as one of the two; MD5/SHA-1 only as legacy second hash | Eng. |
 | G12 | Audit log uses the host clock; only the chain head is stamped | CO-J7, CO-L4 | Check the workstation's time sync before the run; note it | Record clock source and NTP offset in F4 at start and end; optional stamp at intake | Eng. |
@@ -469,15 +488,15 @@ Owners: **Eng.** = engineering (tool), **Counsel**, **Examiner**, **Firm** = Rak
 | G15 | Scope: no imaging, live, cloud or mobile acquisition | ISO-11 | Declared; use dedicated acquisition tools | — | Examiner |
 | G16 | No ANSSI PRIS qualification (market positioning, not admissibility) | §5.5 | — | Optional roadmap item | Firm |
 | G17 | Source access offered without a defined protocol; `LICENSE` at this commit is Apache-2.0 while the intended model is proprietary, auditable, no redistribution | CO-P17, FR-P11, CO-C5 | Provide the exact tagged source on request | Standard NDA and inspection protocol (escrow or supervised review); align the licence file with the owner's model | Firm + Counsel |
-| G18 | `verify-log` checks the token's imprint, status and file digest, but **not** the TSA signature, certificate chain, policy or accuracy | EU-4, CO-L9 | `openssl ts -verify` against the TSA chain (checklist step 9) | Verify the token signature and chain in `verify-log` | Eng. |
+| G18 | `verify-log` checks the token's imprint, status, file digest and the TSA's CMS signature, and with `--tsa-ca` the certificate chain (closed in code); **not** revocation, policy OID or accuracy | EU-4, CO-L9 | `verify-log --tsa-ca <TSA roots>`, plus `openssl ts -verify` as second tool and for revocation (checklist step 9) | Revocation (OCSP/CRL) and policy checks | Eng. |
 | G19 | No command re-verifies report and output files against the digests in the audit log (only the GUI viewer re-checks diff PNGs) | ISO-1, CO-P2 | Script in [usage.md](usage.md#8-verifying-a-run) | `verify-run` command | Eng. |
-| G20 | The evidence is read twice (hash pass, then memory-mapped by the worker); the bytes parsed are not re-hashed | CO-P5, ISO-7 | Analyse a write-protected copy only | Hash inside the worker and compare with the first pass | Eng. |
-| G21 | Independent PDF oracles (tests/oracle_pdf.py) and fuzzing are not run in CI, although ADR 0001 says they are | CO-P14, CO-J8, US-8, ISO-3 | Run `python tests/oracle_pdf.py` and keep the output for the validation dossier | Wire both into CI (nightly) | Eng. |
-| G22 | Release binaries are not bit-for-bit reproducible (toolchain `@stable` in release.yml, no path remapping, zip timestamps) | ISO-3, CO-P17 | Provenance attestation + `environment.json` + functional equivalence ([installation.md](installation.md#9-build-from-source-for-auditors)) | Pinned toolchain, path remapping, deterministic packaging | Eng. |
-| G23 | The worker process is not network-isolated by the OS (it has no network code) | CO-D1, EU-D7 | Run on an offline workstation or block outbound traffic except the TSA | OS-level network restriction for the worker | Eng. |
+| G20 | The evidence is read twice (hash pass, then memory-mapped by the worker). **Closed in code:** the worker re-hashes the parsed bytes with the primary algorithm and compares (`evidence_rehash` in the audit; `EVIDENCE_CHANGED_DURING_ANALYSIS`, high, on a difference); residual: a change is detected, not prevented | CO-P5, ISO-7 | Analyse a write-protected copy only | — (keep in checklist) | Eng. |
+| G21 | **Closed in CI:** `tests/oracle_pdf.py` (pikepdf/qpdf, pyHanko) runs in the `oracle` job on every push (failure blocks; report kept as an artifact) and cargo-fuzz runs nightly (`fuzz.yml`, 10 min). Residual: no poppler `pdfsig` comparison; fuzzing is skipped (with a warning) on a night when the nightly toolchain is unavailable | CO-P14, CO-J8, US-8, ISO-3 | Keep the CI oracle report of the release commit in the validation dossier | Add a `pdfsig` oracle | Eng. |
+| G22 | Release binaries are not bit-for-bit reproducible (no path remapping, zip timestamps; the toolchain itself is now pinned: CI and release.yml read `rust-toolchain.toml`) | ISO-3, CO-P17 | Provenance attestation + `environment.json` + functional equivalence ([installation.md](installation.md#9-build-from-source-for-auditors)) | Path remapping, deterministic packaging (toolchain pin: done) | Eng. |
+| G23 | The worker has no network code (test `worker_code_path_has_no_network_code`). Linux: own empty network namespace when permitted, outcome audited (`worker.network`). **Windows: no OS-level network block** (a Job Object cannot restrict network access) | CO-D1, EU-D7 | Run on an offline workstation or add a firewall rule allowing only the TSA | Windows: AppContainer / WFP filter for the worker (not implemented) | Eng. |
 | G24 | Case-folder linking (`--case-dir`: registry re-verification, `case_linked`, `verify-case`) — **implemented** ([case-folder.md](case-folder.md)); residual: the registry is only as good as the intake (rv-hashinv) run | CO-J3, CO-F5, CO-P2 | Always analyse with `--case-dir` after an rv-hashinv intake; run `verify-case` before handing over the case | Closed in code; keep in checklist | Eng. |
-| G25 | Not persisted in any output: per-page visual-diff measurements (boxes, effective DPI, changed pixels) and the parser warnings with byte offsets (which the `XREF_OFFSETS_INCONSISTENT` wording refers to) | ISO-4, ISO-16, CO-P9 | PNG caption (pair, page, changed share, regions); warnings via `cargo run -p rv-pdfauth-pdf --example dump -- <file>` ([theory.md](theory.md#cross-reference-resolution-per-revision)) | Write both into `technical.json` | Eng. |
-| G26 | Heuristic edges: a revision dated before its predecessor gives no finding; a DSS-only revision under DocMDP P=1 is reported as a violation | CO-C6, US-8 | Read the revision table; check DocMDP cases by hand | Add a finding; align DocMDP with ISO 32000-2/PAdES (to be verified) | Eng. |
+| G25 | **Closed in code:** per-page visual-diff measurements (boxes, effective DPI, changed pixels, share) are in `technical.json` → `pdf.visual.pairs` and in a capped table of the technical HTML/PDF; parser warnings with byte offsets are in `warnings.json` (hashed and audited) and the first 100 in `technical.json` / HTML / PDF | ISO-4, ISO-16, CO-P9 | — | — | Eng. |
+| G26 | Heuristic edge: a DSS-only revision under DocMDP P=1 is reported as a violation. (A revision dated before its predecessor now gives `REVISION_DATE_NOT_MONOTONIC`, medium — closed in code.) | CO-C6, US-8 | Check DocMDP cases by hand | Align DocMDP with ISO 32000-2/PAdES (to be verified) | Eng. |
 
 ## Examiner checklist before filing a report
 
@@ -496,8 +515,9 @@ Owners: **Eng.** = engineering (tool), **Counsel**, **Examiner**, **Firm** = Rak
    `rv-pdfauth verify-log <log folder>` prints `OK`.
 8. **Independent chain check**: `python tests/verify_chain.py <log folder>` exits 0 (it also re-hashes the evidence
    listed in `hashes.csv`).
-9. **Timestamp**: `timestamp_obtained` is present (or obtained later with `rv-pdfauth timestamp`), and the token was
-   verified with OpenSSL against the TSA's certificate chain: `openssl ts -verify -digest <head> -in
+9. **Timestamp**: `timestamp_obtained` is present (or obtained later with `rv-pdfauth timestamp`),
+   `rv-pdfauth verify-log <log folder> --tsa-ca <TSA roots>` reports *chain validated*, and the token was
+   cross-checked with OpenSSL against the TSA's certificate chain: `openssl ts -verify -digest <head> -in
    timestamp-<N>.tsr -CAfile <TSA chain>` ([usage.md](usage.md#6-timestamps)). For proceedings needing a
    presumption, a qualified (EU) or ECD (Colombia) TSA was used.
 10. **Outputs match the log**: report and output files re-hashed against the audited digests
@@ -514,7 +534,8 @@ Owners: **Eng.** = engineering (tool), **Counsel**, **Examiner**, **Firm** = Rak
 15. **Limitations** of the report (F9) are kept, plus case-specific ones (pages beyond `--max-pages`, encrypted
     files, scanned pages).
 16. **Custody**: the official custody form (Fiscalía *Registro* or scellés record) is completed alongside the
-    tool's internal form; missing fields (cargo, ID type, witnesses, assistants) are filled by hand (G9).
+    tool's internal form; its blank fields (cargo / qualité, ID type and number, witnesses, assistants) are
+    filled in by hand and signed (G9).
 17. **The report is signed** with the examiner's certificate (`--sign-cert`) and the certificate fingerprint is
     stated; for a presumption of reliability, a qualified certificate was used (G3).
 18. **The case file keeps together**: evidence copy, `logs/<RUN-ID>/` (incl. `.tsr`), `reports/<RUN-ID>/`,
@@ -583,49 +604,58 @@ France
     <https://www.actu-juridique.fr/procedure-penale/la-reecriture-du-code-de-procedure-penale-enjeux-methode-et-architecture-de-lordonnance-n-2025-1091-du-19-novembre-2025/>
     and Conseil d'État opinion
     <https://conseil-etat.fr/avis-consultatifs/derniers-avis-rendus/au-gouvernement/avis-relatif-a-un-projet-de-loi-ratifiant-l-ordonnance-n-2025-1091-du-19-novembre-2025-portant-reecriture-du-code-de-procedure-penale-partie-legi>
-32. Code civil arts. 1366–1367, Cass. 1re civ. 11-07-2018 n° 17-10.458 and 07-10-2020 n° 19-18.135, via CMS [S]:
+32. Cass. 1re civ. 11-07-2018 n° 17-10.458 and 07-10-2020 n° 19-18.135, via CMS [S]:
     <https://cms.law/en/fra/news-information/le-regime-de-l-ecrit-electronique-a-la-lumiere-de-la-jurisprudence-recente>
-33. Code civil art. 1367 al. 2 and décret 2017-1416, via Centre Inffo [S]:
-    <https://www.centre-inffo.fr/site-droit-formation/actualites-droit/signature-electronique>
-34. Décret n° 2017-1416 of 28-09-2017: Légifrance (not reachable — **to be verified**)
+33. Code civil art. 1366 [V]: <https://justice.pappers.fr/loi/LEGITEXT000006070721/article/LEGIARTI000032042461>;
+    art. 1367: …/LEGIARTI000032042456; art. 1368: …/LEGIARTI000032042451
+34. Décret n° 2017-1416 of 28-09-2017 [V]: <https://justice.pappers.fr/loi/JORFTEXT000035676246> (Légifrance
+    <https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000035676246> not reachable)
 35. ANSSI, Référentiel PRIS v3.2 (not fetched):
     <https://cyber.gouv.fr/sites/default/files/document/PRIS_Referentiel-exigences_v3.2.pdf>
 
-EU (not fetched — content **to be verified**)
+EU
 
-36. Regulation (EU) 910/2014 (eIDAS): <https://eur-lex.europa.eu/eli/reg/2014/910/oj>; art. 41 location via
-    <https://www.legislation.gov.uk/eur/2014/910/article/41> (UK retained version)
-37. Regulation (EU) 2024/1183: <https://eur-lex.europa.eu/eli/reg/2024/1183/oj>
-38. Regulation (EU) 2016/679 (GDPR): <https://eur-lex.europa.eu/eli/reg/2016/679/oj>
-39. Directive (EU) 2016/680: <https://eur-lex.europa.eu/eli/dir/2016/680/oj>
+36. Regulation (EU) 910/2014 (eIDAS), consolidated text 2024-10-18 including Regulation (EU) 2024/1183 and the
+    2025 corrigendum [V]: <https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=CELEX:02014R0910-20241018>
+37. Regulation (EU) 2024/1183: <https://eur-lex.europa.eu/eli/reg/2024/1183/oj> (amendments read through item 36)
+    37a. Commission Implementing Regulation (EU) 2025/1929 of 29-09-2025 (QETS reference standards) [S] (title and
+    date only; annex **to be verified**): <https://eur-lex.europa.eu/eli/reg_impl/2025/1929/oj/eng>
+38. Regulation (EU) 2016/679 (GDPR): <https://eur-lex.europa.eu/eli/reg/2016/679/oj>; articles read via
+    <https://gdpr-info.eu/> [V]
+    38a. European Commission, adequacy decisions [V] (checked 2026-10-21; Colombia not listed):
+    <https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/adequacy-decisions_en>
+39. Directive (EU) 2016/680: <https://eur-lex.europa.eu/eli/dir/2016/680/oj> (not fetched — **to be verified**)
 
-International standards (not read beyond item 2 — content **to be verified**)
+International standards
 
-40. ISO/IEC 27041:2015, 27042:2015, 27043:2015, ISO/IEC 17025:2017, ISO 21043 series: <https://www.iso.org>
-41. ILAC G19:06/2022: <https://ilac.org/latest_ilac_news/revised-ilac-g19-document-published/>; UKAS bulletin
-    2026-08-17 (not fetched):
-    <https://www.ukas.com/wp-content/uploads/2026/08/2026.08.17-Technical-Bulletin-Modules-in-a-forensic-science-process.pdf>
+40. iso.org catalogue pages [V]: ISO/IEC 27037 <https://www.iso.org/standard/44381.html>, 27041
+    <https://www.iso.org/standard/44405.html>, 27042 <https://www.iso.org/standard/44406.html>, 27043
+    <https://www.iso.org/standard/44407.html>, 17025 <https://www.iso.org/standard/66912.html>
+    40a. ISO/IEC 17025:2017 public copy (clause titles, 6.4.13, 7.2.2, 7.11.2) [V]:
+    <https://law.resource.org/pub/us/cfr/ibr/inc/iec/iec.17025.2017.pdf>
+    40b. ISO 21043 parts and editions [S]: <https://connect.snv.ch/en/ics/forensic-science>
+41. UKAS Technical Bulletin 2026-08-17 (ILAC G19 withdrawn, replaced by Global ACI-TECH-1-004) [S]:
+    <https://www.ukas.com/wp-content/uploads/2026/08/2026.08.17-Technical-Bulletin-Modules-in-a-forensic-science-process.pdf>;
+    earlier ILAC notice: <https://ilac.org/latest_ilac_news/revised-ilac-g19-document-published/>
 
 US and UK
 
-42. FRE 702 (2023 amendment), search-confirmed:
-    <https://www.sidley.com/en/insights/newsupdates/2023/12/an-amendment-to-federal-rule-of-evidence-702>; rule text
-    <https://www.law.cornell.edu/rules/fre/rule_702> (not fetched)
-43. FRE 902(13)–(14), search-confirmed:
+42. FRE 702 text and 2023 note [V]: <https://www.law.cornell.edu/rules/fre/rule_702>; effective date [S]:
+    <https://www.sidley.com/en/insights/newsupdates/2023/12/an-amendment-to-federal-rule-of-evidence-702>
+43. FRE 902(13)–(14) and 2017 notes [V]: <https://www.law.cornell.edu/rules/fre/rule_902>; background [S]:
     <https://www.americanbar.org/groups/litigation/resources/newsletters/trial-evidence/new-rules-self-authenticating-electronic-evidence/>
-    and <https://www.forensicfocus.com/legal/new-federal-rule-of-evidence-to-directly-impact-computer-forensics-and-ediscovery-preservation-best-practices/>;
-    rule text <https://www.law.cornell.edu/rules/fre/rule_902> (not fetched)
-44. FRE 901(b)(9): <https://www.law.cornell.edu/rules/fre/rule_901> (not fetched)
-45. SWGDE 18-Q-001-2.1 (2024-03-07):
+44. FRE 901(b)(9) [V]: <https://www.law.cornell.edu/rules/fre/rule_901>
+45. SWGDE 18-Q-001-2.1 v2.1 (2024-03-07) [V]:
     <https://www.swgde.org/wp-content/uploads/2024/04/2024-03-07-SWGDE-Minimum-Requirements-for-Testing-Tools-Used-in-Digital-and-Multimedia-Forensics-18-Q-001-2.1.pdf>
-46. SWGDE MD5/SHA1 position:
+46. SWGDE 12-f-002 v1.0 (2019-09-29), MD5/SHA1 position [V]:
     <https://www.swgde.org/documents/published-complete-listing/swgde-position-on-the-use-of-md5-and-sha1-hash-algorithms-in-digital-and-multimedia-forensics/>
-47. SWGDE Error Mitigation Analysis (2018-11-20):
+47. SWGDE Error Mitigation Analysis v2.0 (2018-11-20) [V]:
     <https://www.swgde.org/wp-content/uploads/2023/11/2018-11-20-SWGDE-Establishing-Confidence-in-DME.pdf>
-48. NIST CFTT (URL from knowledge, not fetched — **to be verified**):
+48. NIST CFTT programme page [V]:
     <https://www.nist.gov/itl/ssd/software-quality-group/computer-forensics-tool-testing-program-cftt>
-49. UK FSR Code of Practice v2 (2025-05-20):
-    <https://assets.publishing.service.gov.uk/media/68401f4be550203c8209cce9/2025_05_20_Code_of_Practice_final.pdf>;
+49. UK FSR Code of Practice v2 (in force 2025-10-02) [V]:
+    <https://www.gov.uk/government/publications/forensic-science-activities-statutory-code-of-practice-version-2/forensic-science-activities-statutory-code-of-practice-version-2-accessible>;
+    PDF <https://assets.publishing.service.gov.uk/media/68401f4be550203c8209cce9/2025_05_20_Code_of_Practice_final.pdf>;
     v1 (withdrawn):
     <https://assets.publishing.service.gov.uk/media/69aaf8756827004e30b8a4d9/WITHDRAWN_FINAL_2023.1.18_Code_of_Practice.pdf>
 50. Daubert v. Merrell Dow Pharmaceuticals, 509 U.S. 579 (1993); Kumho Tire Co. v. Carmichael, 526 U.S. 137

@@ -192,21 +192,37 @@ enum Command {
     /// Manage the local producer/editor fingerprint database (learn, list, export). Offline only.
     #[command(subcommand, after_long_help = FINGERPRINTS_AFTER_HELP)]
     Fingerprints(FingerprintsCmd),
-    /// Verify that an audit log (audit.jsonl) has not been edited, truncated or re-ordered.
+    /// Verify that an audit log (audit.jsonl) has not been edited, truncated or re-ordered, and check
+    /// every RFC 3161 timestamp token of the run (imprint and the TSA's CMS signature).
     #[command(after_long_help = "\
 EXAMPLES:
   rv-pdfauth verify-log rakvor-out/logs/20261019T101500Z-a1b2c3/audit.jsonl
   rv-pdfauth verify-log rakvor-out/logs/20261019T101500Z-a1b2c3
+  rv-pdfauth verify-log rakvor-out/logs/20261019T101500Z-a1b2c3 --tsa-ca digicert-tsa-roots.pem
+
+TIMESTAMP CHECKS:
+  For each timestamp-<N>.tsr: the token covers the chain head of entry N; the TSA's CMS signature is
+  valid (signer certificate in the token, ESS signing-certificate binding, message digest over the
+  TSTInfo, RSA signature, timeStamping key usage). Without --tsa-ca the output says \"chain not
+  validated\"; with it the TSA certificate must chain to a certificate of the bundle (signatures,
+  validity at the token's time, CA flag). Revocation is not checked.
 
 EXIT CODES:
-  0  The chain is intact.
-  1  The log cannot be read.
-  3  The chain is broken: at least one entry was edited, deleted or re-ordered.")]
+  0  The chain is intact and every timestamp token verifies.
+  1  The log or the --tsa-ca file cannot be read.
+  3  The chain is broken (an entry was edited, deleted or re-ordered), or a timestamp token does not
+     verify (altered token, invalid TSA signature, chain not trusted by --tsa-ca).")]
     VerifyLog {
         /// Path to audit.jsonl, or to the run's log folder that contains it.
         ///
         /// Example: rakvor-out/logs/20261019T101500Z-a1b2c3
         log: PathBuf,
+        /// CA bundle (PEM, one or more certificates, or one DER certificate) that the TSA certificate
+        /// must chain to. Obtain it from the TSA's own repository, not from the token.
+        /// Default: none (the TSA signature is checked, the chain is not validated)
+        /// Example: --tsa-ca C:\certs\tsa-roots.pem
+        #[arg(long, value_name = "FILE", verbatim_doc_comment)]
+        tsa_ca: Option<PathBuf>,
     },
     /// Check every hash algorithm against known-answer test vectors.
     #[command(after_long_help = "\
@@ -400,7 +416,8 @@ struct AnalyzeArgs {
     no_timestamp: bool,
 
     /// Examiner's certificate (.p12/.pfx, RSA) used to sign every PDF report. The password is
-    /// read from the environment variable named by --sign-pass-env, or asked for interactively.
+    /// read from the environment variable named by --sign-pass-env, or asked for interactively
+    /// on the terminal without echo.
     /// Default: none (PDFs are not signed)
     /// Example: --sign-cert C:\certs\ana-ruiz.p12
     #[arg(long, value_name = "P12", verbatim_doc_comment)]
@@ -670,7 +687,7 @@ fn main() -> ExitCode {
     ExitCode::from(match cli.command {
         Command::Analyze(a) => analyze(*a),
         Command::Fingerprints(f) => fingerprints_cmd(f),
-        Command::VerifyLog { log } => verify_log(log),
+        Command::VerifyLog { log, tsa_ca } => verify_log(log, tsa_ca),
         Command::VerifyCase { case } => verify_case(case),
         Command::SelfTest => self_test(),
         Command::Timestamp {
@@ -952,10 +969,9 @@ fn password(env: &str) -> Option<String> {
     }
     use std::io::IsTerminal;
     if std::io::stdin().is_terminal() {
-        eprint!("Certificate password: ");
-        let mut line = String::new();
-        std::io::stdin().read_line(&mut line).ok()?;
-        return Some(line.trim_end_matches(['\r', '\n']).to_string());
+        // Read from the controlling terminal with echo switched off (/dev/tty on Unix, CONIN$ on Windows):
+        // the password never appears on screen, in a terminal scroll-back or in a screen recording.
+        return rpassword::prompt_password("Certificate password (input hidden): ").ok();
     }
     None
 }
@@ -993,44 +1009,35 @@ fn timestamp(log: PathBuf, tsa_url: String, actor: Option<String>) -> u8 {
     }
 }
 
-fn verify_log(log: PathBuf) -> u8 {
+fn verify_log(log: PathBuf, tsa_ca: Option<PathBuf>) -> u8 {
     let path = if log.is_dir() {
         log.join("audit.jsonl")
     } else {
         log
     };
+    let anchors = match tsa_ca.as_deref().map(trust::load_ca_bundle).transpose() {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("error: {}", e);
+            return EXIT_ERROR;
+        }
+    };
     let dir = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    let mut tokens = Vec::new();
     let checked = audit::verify(&path).and_then(|n| {
-        let problems = trust::verify_timestamps(&dir, &audit::heads(&path));
-        if problems.is_empty() {
+        let v = trust::verify_timestamps_with(&dir, &audit::heads(&path), anchors.as_deref());
+        tokens = v.tokens;
+        if v.problems.is_empty() {
             Ok(n)
         } else {
-            Err(problems)
+            Err(v.problems)
         }
     });
     match checked {
         Ok(n) => {
             println!("OK  {} entries, chain intact: {}", n, path.display());
-            let mut metas: Vec<_> = std::fs::read_dir(&dir)
-                .map(|d| d.filter_map(|e| e.ok()).map(|e| e.path()).collect())
-                .unwrap_or_default();
-            metas.retain(|p| {
-                p.file_name()
-                    .and_then(|n| n.to_str())
-                    .is_some_and(|n| n.starts_with("timestamp-") && n.ends_with(".json"))
-            });
-            metas.sort();
-            for m in metas {
-                if let Ok(v) = std::fs::read_to_string(&m)
-                    .map(|t| serde_json::from_str::<serde_json::Value>(&t).unwrap_or_default())
-                {
-                    println!(
-                        "    timestamp {} by {} covers entry #{}",
-                        v["gen_time"].as_str().unwrap_or("?"),
-                        v["tsa"].as_str().unwrap_or("?"),
-                        v["covers_seq"]
-                    );
-                }
+            for t in tokens {
+                println!("    {}", t);
             }
             EXIT_OK
         }

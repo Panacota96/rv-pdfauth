@@ -33,8 +33,23 @@ pub const LIMITATIONS: [&str; 9] = [
     "SIGNATURE_TRUST_NOT_VALIDATED",
     "RENDERING_PAGE_CAP",
 ];
+/// Limitations of one item: the run-level list plus the item's own (today: `VISUAL_DIFF_UNAVAILABLE` when
+/// PDFium was missing or could not open / render a revision of this PDF).
+pub fn item_limitations(it: &ItemResult) -> Vec<String> {
+    let mut out: Vec<String> = LIMITATIONS.iter().map(|l| l.to_string()).collect();
+    if let Some(code) = it.details["visual"]["limitation"].as_str()
+        && !out.iter().any(|l| l == code)
+    {
+        out.push(code.to_string());
+    }
+    out
+}
+
 pub const SCHEMA_CUSTODY: &str = "rakvor.item-custody/1";
 const BLANK_TRANSFER_ROWS: usize = 6;
+/// Persons section of the custody form: the examiner, then this many assistant and witness rows.
+const ASSISTANT_ROWS: usize = 2;
+const WITNESS_ROWS: usize = 2;
 
 /// Custody form language per jurisdiction; an English copy is always added.
 pub fn custody_langs(jurisdiction: &str) -> Vec<String> {
@@ -432,6 +447,15 @@ pub fn item_context(lang: &str, run: &RunInfo, it: &ItemResult, audit: &AuditRef
     let c = catalog(lang);
     let mut m = base(c, run);
     m.insert("item".into(), item_view(c, it));
+    m.insert(
+        "limitations".into(),
+        json!(
+            item_limitations(it)
+                .iter()
+                .map(|l| c.limitation(l))
+                .collect::<Vec<_>>()
+        ),
+    );
     m.insert("case".into(), case_view(run));
     m.insert(
         "hash_rows".into(),
@@ -551,7 +575,7 @@ pub fn technical_json(run: &RunInfo, it: &ItemResult) -> Value {
                  "status": it.case_status, "intake_utc": it.intake_utc})),
         "hashes": it.hashes.iter().map(|(a, h)| (a.name().to_string(), json!(h))).collect::<serde_json::Map<_, _>>(),
         "findings": findings_json(it, &run.langs),
-        "limitations": LIMITATIONS,
+        "limitations": item_limitations(it),
         "audit": {"first_seq": it.audit_first_seq, "last_seq": it.audit_last_seq},
         "pdf": pdfview::pdf_json(it),
         "extracted_files": pdfview::extracted_json(it),
@@ -948,6 +972,60 @@ fn pdf_blocks(ctx: &Value) -> Vec<Block> {
                 b.push(Block::Bullet(s(i, "href")));
             }
         }
+        if !s(pv, "visual.limitation").is_empty() {
+            b.push(Block::Note(s(pv, "visual.limitation")));
+        }
+        let pages = arr(&pv["visual"], "page_rows");
+        if !pages.is_empty() {
+            b.push(Block::Heading(t("visual_pages")));
+            b.push(table(
+                vec![
+                    t("vp_pair"),
+                    t("page"),
+                    t("vp_changed"),
+                    t("vp_share"),
+                    t("vp_pixels"),
+                    t("vp_regions"),
+                    "DPI".into(),
+                    t("vp_size_changed"),
+                    t("vp_note"),
+                ],
+                &[9.0, 5.0, 8.0, 10.0, 9.0, 7.0, 5.0, 8.0, 23.0],
+                pages,
+                &[
+                    "pair",
+                    "page",
+                    "status",
+                    "share",
+                    "pixels",
+                    "regions",
+                    "dpi",
+                    "size_changed",
+                    "note",
+                ],
+            ));
+            if !s(pv, "visual.page_rows_more").is_empty() {
+                b.push(Block::Para(s(pv, "visual.page_rows_more")));
+            }
+        }
+        b.push(Block::Heading(t("parser_warnings")));
+        let warns = arr(&pv["warnings"], "rows");
+        if warns.is_empty() {
+            b.push(Block::Para(t("none")));
+        } else {
+            b.push(table(
+                vec![t("warning_offset"), t("warning_message")],
+                &[12.0, 72.0],
+                warns,
+                &["offset", "message"],
+            ));
+            if !s(pv, "warnings.more").is_empty() {
+                b.push(Block::Para(s(pv, "warnings.more")));
+            }
+        }
+        if !s(pv, "warnings.file").is_empty() {
+            b.push(Block::Para(t("warnings_file_note")));
+        }
     }
     let ex = arr(ctx, "extracted");
     if !ex.is_empty() {
@@ -1124,8 +1202,19 @@ pub fn custody_context(lang: &str, run: &RunInfo, it: &ItemResult, audit: &Audit
     cu["jurisdiction_label"] = json!(c.ui(&format!("jur_{}", j)));
     cu["operation_text"] = json!(crate::i18n::fill(&get("operation_text"), &params));
     cu["blank_rows"] = json!((0..BLANK_TRANSFER_ROWS).collect::<Vec<_>>());
+    cu["persons_note"] = json!(get(&format!("persons_note_{}", j)));
+    cu["person_rows"] = json!(custody_person_roles(&get, &run.actor));
     ctx["custody"] = cu;
     ctx
+}
+
+/// First-column labels of the persons table: "Examiner: <name>", then assistants and witnesses (blank rows
+/// for name, position, ID type and number, signature — filled in by hand).
+fn custody_person_roles(get: &dyn Fn(&str) -> String, actor: &str) -> Vec<String> {
+    let mut v = vec![format!("{}: {}", get("examiner"), actor)];
+    v.extend(std::iter::repeat_n(get("role_assistant"), ASSISTANT_ROWS));
+    v.extend(std::iter::repeat_n(get("role_witness"), WITNESS_ROWS));
+    v
 }
 
 /// The case registry id (E0001…) when the run is linked to a case, else "<RUN-ID>-<NNNNN>".
@@ -1145,6 +1234,10 @@ pub fn custody_json(run: &RunInfo, it: &ItemResult) -> Value {
         "item": {"index": it.index, "path": it.path.display().to_string(), "file_name": it.file_name(), "size": it.size},
         "hashes": it.hashes.iter().map(|(a, h)| (a.name().to_string(), json!(h))).collect::<serde_json::Map<_, _>>(),
         "examiner": run.actor,
+        // Identification fields of the official forms, completed by hand on the printed form (null here).
+        "examiner_identity": {"name": run.actor, "position": null, "id_type": null, "id_number": null},
+        "assistants": [],
+        "witnesses": [],
         "operations": [{"tool": run.tool_name, "version": run.tool_version, "start_utc": run.started_utc, "end_utc": run.finished_utc,
                         "audit_first_seq": it.audit_first_seq, "audit_last_seq": it.audit_last_seq}],
         "transfers": [],
@@ -1188,6 +1281,25 @@ pub fn custody_pdf(ctx: &Value, run: &RunInfo) -> Result<Vec<u8>, String> {
         Block::Heading(c("operations")),
         Block::Para(c("operation_text")),
         Block::Kv(vec![(c("examiner"), s(ctx, "run.actor"))]),
+        Block::Heading(c("persons")),
+        Block::Note(c("persons_note")),
+        Block::Grid {
+            header: vec![
+                c("role"),
+                c("full_name"),
+                c("position"),
+                c("id_type"),
+                c("id_number"),
+                c("signature_line"),
+            ],
+            widths: vec![105.0, 100.0, 75.0, 70.0, 70.0, 75.0],
+            rows: 0,
+            row_h: 28.0,
+            labels: arr(&ctx["custody"], "person_rows")
+                .iter()
+                .map(|v| v.as_str().unwrap_or_default().to_string())
+                .collect(),
+        },
         Block::Heading(c("transfers")),
         Block::Grid {
             header: vec![
@@ -1200,6 +1312,7 @@ pub fn custody_pdf(ctx: &Value, run: &RunInfo) -> Result<Vec<u8>, String> {
             widths: vec![80.0, 120.0, 120.0, 80.0, 95.0],
             rows: BLANK_TRANSFER_ROWS,
             row_h: 30.0,
+            labels: vec![],
         },
         Block::Heading(c("observations")),
         Block::Grid {
@@ -1207,6 +1320,7 @@ pub fn custody_pdf(ctx: &Value, run: &RunInfo) -> Result<Vec<u8>, String> {
             widths: vec![495.0],
             rows: 2,
             row_h: 30.0,
+            labels: vec![],
         },
         Block::SignLines(vec![
             format!(
@@ -1218,6 +1332,7 @@ pub fn custody_pdf(ctx: &Value, run: &RunInfo) -> Result<Vec<u8>, String> {
             format!("{} \u{2014} {}", c("received_by"), c("signature_line")),
         ]),
     ];
+    // b[3] = the item key/value block (case, evidence id, description, location).
     if let Some(Block::Kv(rows)) = b.get_mut(3) {
         if s(ctx, "run.case_id").is_empty() {
             rows[0].1 = String::new();

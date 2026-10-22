@@ -135,6 +135,36 @@ fn visual_images(it: &ItemResult) -> Vec<String> {
         .collect()
 }
 
+/// Rows of parser warnings and of per-page visual data shown in the HTML/PDF reports; the JSON keeps all.
+pub const MAX_WARNING_ROWS: usize = 100;
+pub const MAX_VISUAL_PAGE_ROWS: usize = 200;
+
+/// `technical.json` → `pdf.warnings`: count, the first rows and the file holding the full list.
+fn warnings_json(it: &ItemResult) -> Value {
+    let all = it.details["warnings"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let file = it
+        .outputs
+        .iter()
+        .find(|o| o.kind == "parser_warnings")
+        .map(|o| o.rel_path.clone());
+    json!({
+        "count": all.len(),
+        "shown": all.iter().take(MAX_WARNING_ROWS).cloned().collect::<Vec<_>>(),
+        "truncated": all.len() > MAX_WARNING_ROWS,
+        "parser_cap_reached": all.len() > rv_pdfauth_pdf::doc::MAX_WARNINGS,
+        "file": file,
+    })
+}
+
+/// `technical.json` → `pdf.visual.pairs`: every compared pair with its per-page measurements (status, changed
+/// pixels, ppm and ratio, effective DPI, size, boxes, PNG), exactly as the visual diff computed them.
+fn visual_pairs(vis: &Value) -> Vec<Value> {
+    vis["pairs"].as_array().cloned().unwrap_or_default()
+}
+
 /// `technical.json` → `pdf` (null for items that are not PDFs or whose analysis did not complete).
 pub fn pdf_json(it: &ItemResult) -> Value {
     if !is_pdf(it) {
@@ -158,9 +188,11 @@ pub fn pdf_json(it: &ItemResult) -> Value {
         "fonts": d["fonts"].as_array().cloned().unwrap_or_default(),
         "fingerprint_dbs": d["fingerprint_dbs"].as_array().cloned().unwrap_or_default(),
         "fingerprint_matches": d["fingerprints"].as_array().cloned().unwrap_or_default(),
+        "warnings": warnings_json(it),
         "visual": {
             "status": vis["status"], "reason": vis["reason"], "pairs_compared": vis["pairs_compared"],
             "pages_changed": vis["pages_changed"], "dpi": vis["dpi"], "images": visual_images(it),
+            "limitation": vis["limitation"], "pairs": visual_pairs(vis),
         },
     })
 }
@@ -472,6 +504,61 @@ pub fn pdf_view(c: &Catalog, it: &ItemResult) -> Value {
         })
         .collect();
     let vis_status = str_of(&vis["status"]).unwrap_or_else(|| "not_applicable".into());
+    let warn = &pj["warnings"];
+    let warning_rows: Vec<Value> = warn["shown"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .map(|w| json!({"offset": w["offset"], "message": or_dash(str_of(&w["message"]))}))
+        .collect();
+    let warnings_count = warn["count"].as_u64().unwrap_or(0);
+    let more = |shown: usize, total: u64, file: &str| -> String {
+        if total as usize <= shown {
+            return String::new();
+        }
+        let mut p = BTreeMap::new();
+        p.insert("n".to_string(), (total as usize - shown).to_string());
+        p.insert("file".to_string(), file.to_string());
+        fill(&c.label("rows_more"), &p)
+    };
+    let mut page_rows: Vec<Value> = Vec::new();
+    let mut page_total = 0u64;
+    for pair in vis["pairs"].as_array().cloned().unwrap_or_default() {
+        let label = format!("{}\u{2192}{}", pair["from_rev"], pair["to_rev"]);
+        if pair["status"] == "error" {
+            page_total += 1;
+            if page_rows.len() < MAX_VISUAL_PAGE_ROWS {
+                page_rows.push(json!({"pair": label, "page": "\u{2014}", "status": c.label("visual_error"),
+                    "share": "\u{2014}", "pixels": "\u{2014}", "regions": "\u{2014}", "dpi": "\u{2014}",
+                    "size_changed": "\u{2014}", "note": or_dash(str_of(&pair["reason"]))}));
+            }
+            continue;
+        }
+        for pg in pair["pages"].as_array().cloned().unwrap_or_default() {
+            page_total += 1;
+            if page_rows.len() >= MAX_VISUAL_PAGE_ROWS {
+                continue;
+            }
+            let row = if pg["status"] == "error" {
+                json!({"pair": label, "page": pg["page"], "status": c.label("visual_error"),
+                    "share": "\u{2014}", "pixels": "\u{2014}", "regions": "\u{2014}", "dpi": "\u{2014}",
+                    "size_changed": "\u{2014}", "note": or_dash(str_of(&pg["reason"]))})
+            } else {
+                let ppm = pg["changed_ppm"].as_u64().unwrap_or(0);
+                json!({"pair": label, "page": pg["page"],
+                    "status": yes_no(c, &pg["changed"]),
+                    "share": format!("{}.{:04} %", ppm / 10_000, ppm % 10_000),
+                    "pixels": pg["changed_pixels"], "regions": count(&pg["boxes"]),
+                    "dpi": pg["dpi"], "size_changed": yes_no(c, &pg["size_changed"]),
+                    "note": or_dash(str_of(&pg["png"]))})
+            };
+            page_rows.push(row);
+        }
+    }
+    let limitation = str_of(&vis["limitation"])
+        .map(|l| c.limitation(&l))
+        .unwrap_or_default();
     json!({
         "revision_rows": rev_rows,
         "timeline": timeline,
@@ -487,6 +574,15 @@ pub fn pdf_view(c: &Catalog, it: &ItemResult) -> Value {
             "pairs_compared": vis["pairs_compared"].as_u64().unwrap_or(0),
             "pages_changed": vis["pages_changed"].as_u64().unwrap_or(0),
             "images": images,
+            "page_rows": page_rows,
+            "page_rows_more": more(MAX_VISUAL_PAGE_ROWS, page_total, "technical.json"),
+            "limitation": limitation,
+        },
+        "warnings": {
+            "count": warnings_count,
+            "rows": warning_rows,
+            "more": more(MAX_WARNING_ROWS, warnings_count, str_of(&warn["file"]).as_deref().unwrap_or("warnings.json")),
+            "file": str_of(&warn["file"]).unwrap_or_default(),
         },
         "history_text": history(it).map(|h| history_text(c, &h)).unwrap_or_default(),
     })
@@ -608,6 +704,107 @@ mod tests {
         let ov = pdf_overview(&[it]);
         assert_eq!(ov["multi_revision"], 1);
         assert_eq!(ov["online_editor"], 1);
+    }
+
+    #[test]
+    fn warnings_and_per_page_visual_data_reach_the_technical_report() {
+        let warnings: Vec<Value> = (0..150)
+            .map(|i| json!({"offset": 1000 + i, "message": format!("xref entry {} points elsewhere", i)}))
+            .collect();
+        let page = |p: u64, ppm: u64| {
+            json!({"page": p, "status": "compared", "changed": ppm > 0, "changed_ppm": ppm,
+                   "changed_ratio": "0.015000", "changed_pixels": 300, "dpi": 110, "width": 200,
+                   "height": 100, "size_changed": false, "boxes": [{"x": 46, "y": 36, "w": 38, "h": 18}],
+                   "boxes_truncated": false})
+        };
+        let mut it = item(json!({
+            "revisions": [{"index": 1}, {"index": 2}],
+            "warnings": warnings,
+            "visual": {"status": "done", "pairs_compared": 1, "pages_changed": 1, "pairs": [
+                {"from_rev": 1, "to_rev": 2, "status": "done", "pages": (1..=250).map(|p| page(p, if p == 1 { 15_000 } else { 0 })).collect::<Vec<_>>()}
+            ]},
+        }));
+        it.outputs.push(crate::report::OutputRecord {
+            rel_path: "warnings.json".into(),
+            kind: "parser_warnings".into(),
+            bytes: 10,
+            hashes: BTreeMap::new(),
+        });
+        let j = pdf_json(&it);
+        assert_eq!(j["warnings"]["count"], 150);
+        assert_eq!(
+            j["warnings"]["shown"].as_array().unwrap().len(),
+            MAX_WARNING_ROWS
+        );
+        assert_eq!(j["warnings"]["truncated"], true);
+        assert_eq!(j["warnings"]["file"], "warnings.json");
+        assert_eq!(j["warnings"]["shown"][0]["offset"], 1000);
+        // The JSON keeps every page measurement.
+        assert_eq!(
+            j["visual"]["pairs"][0]["pages"].as_array().unwrap().len(),
+            250
+        );
+        assert_eq!(j["visual"]["pairs"][0]["pages"][0]["changed_pixels"], 300);
+        // The HTML/PDF view model is capped and says where the rest is.
+        let v = pdf_view(catalog("en"), &it);
+        assert_eq!(
+            v["warnings"]["rows"].as_array().unwrap().len(),
+            MAX_WARNING_ROWS
+        );
+        assert!(
+            v["warnings"]["more"]
+                .as_str()
+                .unwrap()
+                .contains("50 more rows")
+        );
+        assert!(
+            v["warnings"]["more"]
+                .as_str()
+                .unwrap()
+                .contains("warnings.json")
+        );
+        let rows = v["visual"]["page_rows"].as_array().unwrap();
+        assert_eq!(rows.len(), MAX_VISUAL_PAGE_ROWS);
+        assert_eq!(rows[0]["share"], "1.5000 %");
+        assert_eq!(rows[0]["regions"], 1);
+        assert_eq!(rows[0]["status"], "yes");
+        assert!(
+            v["visual"]["page_rows_more"]
+                .as_str()
+                .unwrap()
+                .contains("technical.json")
+        );
+        // Rendered in every language without leaving template placeholders.
+        for l in ["en", "es", "fr"] {
+            let v = pdf_view(catalog(l), &it);
+            assert!(!v["warnings"]["more"].as_str().unwrap().contains("%{"));
+        }
+    }
+
+    #[test]
+    fn visual_diff_unavailable_is_an_item_limitation_worded_in_every_language() {
+        let it = item(json!({"revisions": [], "visual": {"status": "skipped",
+            "limitation": crate::visual::UNAVAILABLE}}));
+        let lims = crate::report::item_limitations(&it);
+        assert_eq!(
+            lims.last().map(String::as_str),
+            Some("VISUAL_DIFF_UNAVAILABLE")
+        );
+        assert_eq!(lims.len(), crate::report::LIMITATIONS.len() + 1);
+        assert_eq!(
+            crate::report::item_limitations(&item(json!({"revisions": []}))).len(),
+            crate::report::LIMITATIONS.len()
+        );
+        for l in ["en", "es", "fr"] {
+            let text = catalog(l).limitation("VISUAL_DIFF_UNAVAILABLE");
+            assert!(text.len() > 40 && text != "VISUAL_DIFF_UNAVAILABLE", "{l}");
+        }
+        // Every run-level limitation is worded too.
+        for code in crate::report::LIMITATIONS {
+            for l in ["en", "es", "fr"] {
+                assert_ne!(catalog(l).limitation(code), code, "{l} {code}");
+            }
+        }
     }
 
     #[test]

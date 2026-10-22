@@ -121,6 +121,19 @@
     "reason": "Motivo",
     "visual_none": "No se generó ninguna imagen de diferencias.",
     "visual_files": "Imágenes de diferencias (en la carpeta de este elemento):",
+    "visual_pages": "Mediciones por página",
+    "vp_pair": "Revisiones",
+    "vp_changed": "Cambió",
+    "vp_share": "Proporción cambiada",
+    "vp_pixels": "Píxeles cambiados",
+    "vp_regions": "Regiones",
+    "vp_size_changed": "Cambió el tamaño de página",
+    "vp_note": "Imagen / motivo",
+    "parser_warnings": "Advertencias del analizador",
+    "warning_offset": "Posición (byte)",
+    "warning_message": "Advertencia",
+    "warnings_file_note": "La lista completa de advertencias del analizador está en warnings.json, en la carpeta de este elemento (su hash figura en el registro de auditoría y en la tabla de archivos extraídos).",
+    "rows_more": "No se muestran otras %{n} filas; la lista completa está en %{file}.",
     "visual_done": "Comparadas",
     "visual_skipped": "Omitida",
     "visual_not_applicable": "No aplica",
@@ -210,6 +223,11 @@
       "shows": "El análisis aislado de este archivo se detuvo antes de terminar (motivo: %{reason}, código de salida %{exit_code}). Se calculó el hash del archivo y su registro de integridad está completo; la estructura del PDF, sus revisiones y la comparación visual no se analizaron por completo.",
       "does_not_prove": "No demuestra que el archivo sea malicioso o falso: archivos dañados, inusuales o muy grandes pueden agotar los límites de tiempo o de memoria. Repita con límites más altos o examine el archivo manualmente."
     },
+    "EVIDENCE_CHANGED_DURING_ANALYSIS": {
+      "title": "La evidencia cambió durante el análisis",
+      "shows": "Los bytes leídos para el análisis del PDF tienen %{algorithm} %{second_pass}, pero la pasada de hash registró %{first_pass} para el mismo archivo: el archivo cambió entre las dos lecturas, de modo que los resultados del análisis pueden no corresponder a la evidencia cuyo hash se calculó.",
+      "does_not_prove": "Quién o qué modificó el archivo (un programa de sincronización, el antivirus, otro programa o un disco defectuoso pueden hacerlo) ni que la evidencia original esté alterada; trabaje sobre una copia protegida contra escritura y repita la ejecución."
+    },
     "VISUAL_CHANGE_BETWEEN_REVISIONS": {
       "title": "Cambio visible entre revisiones",
       "shows": "Al representar la revisión %{from_rev} y la revisión %{to_rev} se obtienen imágenes distintas en la(s) página(s) %{pages} (mayor proporción cambiada %{changed_ratio_max}); páginas añadidas: %{pages_added}; páginas eliminadas: %{pages_removed}. Las zonas cambiadas están recuadradas en las imágenes de comparación.",
@@ -239,6 +257,11 @@
       "title": "Intervalo de tiempo entre revisiones",
       "shows": "La revisión %{to_rev} tiene una fecha %{gap} posterior a la de la revisión %{from_rev} (según sus fechas de modificación).",
       "does_not_prove": "Las fechas de los metadatos las escribe el programa de edición a partir del reloj del equipo y pueden fijarse a voluntad; el intervalo no prueba cuándo se hicieron realmente los cambios ni quién los hizo."
+    },
+    "REVISION_DATE_NOT_MONOTONIC": {
+      "title": "Revisión con fecha anterior a la previa",
+      "shows": "La revisión %{to_rev} se añadió al archivo después de la revisión %{from_rev}, pero su fecha de modificación (%{to_date}) es %{gap} anterior a la de la revisión %{from_rev} (%{from_date}).",
+      "does_not_prove": "Las fechas de los metadatos provienen del reloj del equipo que guardó cada revisión y pueden fijarse a voluntad; un reloj mal configurado, un error de zona horaria o fechas copiadas por un editor pueden producirlo. Por sí solo no demuestra que el documento se haya antedatado a propósito."
     },
     "PRODUCER_CHANGED_BETWEEN_REVISIONS": {
       "title": "Software distinto entre revisiones",
@@ -370,7 +393,8 @@
     "FLATTENED_OR_REGENERATED_PDF_LOSES_HISTORY": "Cuando un PDF se imprime a PDF, se aplana, se optimiza o se regenera, se pierden sus revisiones anteriores y la mayoría de las huellas de edición; solo puede examinarse su último estado.",
     "FINGERPRINT_DB_COVERAGE": "Las huellas de productores provienen de una base limitada (documentación de fabricantes y archivos generados por Rakvor); el productor puede escribirse a mano, y los valores desconocidos o falsificados no pueden reconocerse.",
     "SIGNATURE_TRUST_NOT_VALIDATED": "Las firmas digitales solo se verifican en cuanto a cobertura de bytes e integridad criptográfica; no se validan las cadenas de certificados, la revocación ni la identidad del firmante.",
-    "RENDERING_PAGE_CAP": "La comparación visual entre revisiones representa solo un número limitado de páginas por revisión; las páginas que superan ese límite solo se comparan estructuralmente."
+    "RENDERING_PAGE_CAP": "La comparación visual entre revisiones representa solo un número limitado de páginas por revisión; las páginas que superan ese límite solo se comparan estructuralmente.",
+    "VISUAL_DIFF_UNAVAILABLE": "No se pudo hacer la comparación visual de algunas o todas las revisiones de este elemento (faltaba el motor de representación de PDF o no pudo abrir una revisión); esas revisiones solo se compararon estructuralmente, y los archivos de revisión extraídos pueden compararse a simple vista."
   },
   "brand": {
     "descriptor": "FORENSE | RESPUESTA A INCIDENTES | SEGURIDAD",
@@ -392,10 +416,20 @@
     "operation_text": "Cálculo de hash y análisis en modo solo lectura con %{tool} %{version}, ejecución %{run_id}, de %{start} a %{end} (UTC). Entradas de auditoría #%{first}–#%{last}.",
     "transfers": "Traspasos de custodia",
     "date_time": "Fecha y hora",
-    "delivered_by": "Entrega (nombre, identificación, firma)",
-    "received_by": "Recibe (nombre, identificación, firma)",
+    "delivered_by": "Entrega (nombre, cargo, tipo y número de documento, firma)",
+    "received_by": "Recibe (nombre, cargo, tipo y número de documento, firma)",
     "purpose": "Propósito",
     "condition": "Estado del embalaje / soporte",
+    "persons": "Personas que intervienen (perito, auxiliares, testigos)",
+    "persons_note_co": "Toda persona que manipule el elemento o presencie el examen firma aquí con nombre completo, cargo, tipo y número de documento de identidad (CC, CE, pasaporte): la identificación que exige el registro de cadena de custodia de la Fiscalía.",
+    "persons_note_fr": "El perito, las personas que lo asistieron y las personas presentes (testigos, p. ej. en la apertura o el nuevo sellado de un scellé) firman aquí con nombre completo, calidad (qualité) y documento de identidad.",
+    "role": "Función",
+    "full_name": "Nombre completo",
+    "position": "Cargo",
+    "id_type": "Tipo de documento de identidad",
+    "id_number": "Número de documento",
+    "role_assistant": "Auxiliar",
+    "role_witness": "Testigo",
     "examiner": "Perito",
     "signature_line": "Firma",
     "observations": "Observaciones",

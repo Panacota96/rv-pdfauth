@@ -35,12 +35,14 @@ pub enum Block {
     },
     Status(String),
     Space(f32),
-    /// Table with a header row and `rows` empty rows to fill in by hand (custody transfers).
+    /// Table with a header row and `rows` empty rows to fill in by hand (custody transfers). `labels`
+    /// pre-fills the first cell of the first rows (e.g. the role of each person); the rest stays blank.
     Grid {
         header: Vec<String>,
         widths: Vec<f32>,
         rows: usize,
         row_h: f32,
+        labels: Vec<String>,
     },
     /// Signature lines side by side: label under each line.
     SignLines(Vec<String>),
@@ -478,6 +480,7 @@ pub fn render(blocks: &[Block], meta: &Meta, sign: Option<SignFn>) -> Result<Vec
                 widths,
                 rows,
                 row_h,
+                labels,
             } => {
                 const SIZE: f32 = 7.5;
                 let lead = SIZE * 1.3;
@@ -520,9 +523,18 @@ pub fn render(blocks: &[Block], meta: &Meta, sign: Option<SignFn>) -> Result<Vec
                     l.y = top - h;
                 };
                 draw_row(&mut l, head_h, Some(&wrapped));
-                for _ in 0..*rows {
+                for i in 0..(*rows).max(labels.len()) {
                     l.ensure(*row_h);
-                    draw_row(&mut l, *row_h, None);
+                    match labels.get(i).filter(|s| !s.is_empty()) {
+                        Some(label) => {
+                            let mut cells: Vec<Vec<String>> = vec![Vec::new(); widths.len()];
+                            if let (Some(first), Some(w)) = (cells.first_mut(), widths.first()) {
+                                *first = wrap(label, Font::Regular, SIZE, w - 6.0);
+                            }
+                            draw_row(&mut l, *row_h, Some(&cells));
+                        }
+                        None => draw_row(&mut l, *row_h, None),
+                    }
                 }
                 l.y -= 6.0;
             }
@@ -820,6 +832,7 @@ mod tests {
                     widths: vec![100.0, 100.0],
                     rows: 3,
                     row_h: 20.0,
+                    labels: vec!["Witness".into()],
                 },
                 Block::SignLines(vec!["Examiner".into(), "Receiver".into()]),
             ],

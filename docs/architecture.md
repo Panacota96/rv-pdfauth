@@ -34,7 +34,7 @@ flowchart TB
 | `input.rs` | Files, folders, list files → sorted, de-duplicated, absolute paths. Symlinks not followed. | No |
 | `hash.rs` | One read loop (1 MiB chunks) feeding 1–2 digests; known-answer self-test. | No |
 | `analyzer.rs` | Dispatch: PDF candidates to the PDF analysis (worker), other files to signature detection and inventory findings. | **Yes — this is the domain logic** |
-| `pdfscan.rs` | In-process PDF analysis of one item: read-only memory map, `rv_pdfauth_pdf::analyze`, derived outputs (revisions, `objects.json`, `embedded/`). | PDF-specific |
+| `pdfscan.rs` | In-process PDF analysis of one item: read-only memory map, `rv_pdfauth_pdf::analyze`, derived outputs (revisions, `objects.json`, `warnings.json`, `embedded/`); re-hash of the mapped bytes. | PDF-specific |
 | `worker.rs` | Child-process isolation (`<exe> worker`), limits, reply protocol `rv-pdfauth-worker/1`, `PARSER_FAILED`. | Reusable for heavy analyzers |
 | `visual.rs` | Visual diff of consecutive revisions with PDFium (`src/render`). | PDF-specific |
 | `fingerprints.rs` | Starter, local and extra producer databases and their identity for the audit trail. | PDF-specific |
@@ -124,6 +124,7 @@ run.rs ──► analyzer::analyze_item ── not a PDF ──► inventory ana
   file the tool wrote; they support no finding. Files a successful worker did not list become
   `unlisted_output`; listed paths outside the item folder are rejected.
 - **Outputs**: `revisions/rev-NN.pdf` (exact byte prefixes, only with >1 revision), `objects.json`,
+  `warnings.json` (every parser warning with its byte offset; always written for an analysed PDF),
   `embedded/NN-<name>.<jpg|bin>` (+ `.inflated.*` for FlateDecode), `visual/rev-NN-vs-MM-page-PPP.png`.
 - **Visual diff** (`src/render`): consecutive revisions, pages present in both up to `max_pages`, rendered by
   PDFium on the CPU at `dpi` (lowered for pages above 40 Mpx). A pixel changes when a channel differs by more
@@ -133,7 +134,8 @@ run.rs ──► analyzer::analyze_item ── not a PDF ──► inventory ana
   a side-by-side PNG (boxes in violet on both halves) and `VISUAL_CHANGE_BETWEEN_REVISIONS` (medium); added or
   removed pages are listed. Ratios are integer ppm or decimal strings — no floats in audited JSON.
 - **Audit**: `item_analyzed.details.analysis` records the fingerprint DBs used (role, name, version, SHA-256),
-  the PDFium library (path, SHA-256, pinned build), the worker outcome and the visual-diff status.
+  the PDFium library (path, SHA-256, pinned build), the worker outcome, the visual-diff status and
+  `evidence_rehash` (the worker's digest of the parsed bytes compared with the hashing pass).
 
 ## Why Rust
 

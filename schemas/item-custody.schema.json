@@ -12,7 +12,10 @@
     "hashes",
     "examiner",
     "operations",
-    "transfers"
+    "transfers",
+    "examiner_identity",
+    "assistants",
+    "witnesses"
   ],
   "properties": {
     "schema": {
@@ -102,7 +105,47 @@
     "transfers": {
       "type": "array",
       "items": {
-        "type": "object"
+        "type": "object",
+        "properties": {
+          "date_time": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "delivered_by": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/person"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "received_by": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/person"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "purpose": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "condition": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
       }
     },
     "intake_utc": {
@@ -111,6 +154,63 @@
         "null"
       ],
       "description": "Case folder only: when the item was registered at intake."
+    },
+    "examiner_identity": {
+      "$ref": "#/$defs/person"
+    },
+    "assistants": {
+      "type": "array",
+      "description": "Persons who assisted the examiner.",
+      "items": {
+        "$ref": "#/$defs/person"
+      }
+    },
+    "witnesses": {
+      "type": "array",
+      "description": "Persons present (e.g. at the opening or re-sealing of a seal).",
+      "items": {
+        "$ref": "#/$defs/person"
+      }
+    }
+  },
+  "$defs": {
+    "person": {
+      "type": "object",
+      "description": "Identification as the official forms ask for it; null until completed (the printed form is filled in by hand).",
+      "required": [
+        "name",
+        "position",
+        "id_type",
+        "id_number"
+      ],
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "position": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Cargo (Colombia) / qualité (France)."
+        },
+        "id_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "e.g. CC, CE, passport, carte nationale d'identité."
+        },
+        "id_number": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
     }
   }
 }

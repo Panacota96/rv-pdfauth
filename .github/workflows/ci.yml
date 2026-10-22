@@ -22,8 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Toolchain pinned in rust-toolchain.toml
+        id: toolchain
+        shell: bash
+        run: echo "channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ steps.toolchain.outputs.channel }}
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
@@ -39,6 +44,54 @@ jobs:
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
           ./actionlint -color
 
+  oracle:
+    # Independent PDF oracles (ADR 0001): pikepdf/qpdf and pyHanko re-derive revisions, page counts, trailer
+    # IDs, the merged xref and every signature verdict of the samples; any disagreement fails the build.
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain pinned in rust-toolchain.toml
+        id: toolchain
+        shell: bash
+        run: echo "channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.toolchain.outputs.channel }}
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Oracles (test-only, never shipped)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q qpdf
+          pip install pikepdf pyhanko
+      - name: Cross-check the PDF layer against pikepdf/qpdf and pyHanko
+        run: python tests/oracle_pdf.py | tee oracle.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: oracle-report-${{ github.sha }}
+          path: oracle.txt
+          retention-days: 30
+
+  msrv:
+    # The minimum Rust versions declared in Cargo.toml (rust-version) really build: 1.88 for the CLI and the
+    # core crates (edition 2024 let chains), 1.95 for the GUI (egui 0.37). `cargo +X` overrides rust-toolchain.toml.
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the declared minimum toolchains
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal
+          rustup toolchain install 1.95.0 --profile minimal
+      - name: cargo check with the declared minimums
+        run: |
+          cargo +1.88.0 check --locked -p rv-pdfauth-cli -p rv-pdfauth-core -p rv-pdfauth-pdf -p rv-pdfauth-render
+          cargo +1.95.0 check --locked -p rv-pdfauth-gui
+
   test:
     needs: lint
     strategy:
@@ -48,7 +101,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Toolchain pinned in rust-toolchain.toml
+        id: toolchain
+        shell: bash
+        run: echo "channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.toolchain.outputs.channel }}
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-python@v5
         with:
@@ -109,6 +168,33 @@ jobs:
           cargo build --release --locked -p rv-pdfauth-cli -p rv-pdfauth-gui
           # PDFium is loaded from next to the executable.
           Copy-Item third_party\pdfium\win-x64\pdfium.dll target\release\
+      - name: Installer compiles (Inno Setup; installed with Chocolatey when the image lacks it)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; if ($LASTEXITCODE -ne 0) { exit 1 } }
+          & $iscc /DAppVersion=0.0.0 /DSourceDir=$PWD /O$PWD\dist packaging\windows\installer.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Installer round trip (user PATH entry added on install, removed on uninstall)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem dist\*-setup.exe | Select-Object -First 1).FullName
+          $dir = Join-Path $env:LOCALAPPDATA "Programs\Rakvor\RV PDFAuth"
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TASKS=addtopath' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "setup exit code $($p.ExitCode)" }
+          $path = [Environment]::GetEnvironmentVariable("Path", "User")
+          if (-not ($path.Split(";") -contains $dir)) { throw "PATH entry missing after install: $path" }
+          & (Join-Path $dir "rv-pdfauth.exe") self-test
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $u = Start-Process (Join-Path $dir "unins000.exe") -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+          if ($u.ExitCode -ne 0) { throw "uninstall exit code $($u.ExitCode)" }
+          # The uninstaller re-launches itself from %TEMP%: poll until it has finished.
+          for ($i = 0; $i -lt 60 -and (Test-Path (Join-Path $dir "rv-pdfauth.exe")); $i++) { Start-Sleep -Seconds 1 }
+          $path = [Environment]::GetEnvironmentVariable("Path", "User")
+          if ($path -and ($path.Split(";") -contains $dir)) { throw "PATH entry left after uninstall: $path" }
+          "PATH entry added on install and removed on uninstall"
       - uses: actions/upload-artifact@v4
         if: runner.os == 'Windows'
         with:

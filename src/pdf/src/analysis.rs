@@ -1183,6 +1183,19 @@ pub fn build(bytes: &[u8], opts: &PdfOptions) -> PdfReport {
                     .with("gap", fmt_gap(b - a)),
             );
         }
+        // An incremental update is appended after its predecessor, so its save date should not be earlier.
+        if let (Some(a), Some(b)) = (rev_time(&w[0]), rev_time(&w[1]))
+            && b < a
+        {
+            f.push(
+                PdfFinding::new("REVISION_DATE_NOT_MONOTONIC", Severity::Medium)
+                    .with("from_rev", w[0].index.to_string())
+                    .with("to_rev", w[1].index.to_string())
+                    .with("from_date", meta::iso_utc(a))
+                    .with("to_date", meta::iso_utc(b))
+                    .with("gap", fmt_gap(a - b)),
+            );
+        }
         if let (Some(a), Some(b)) = (&w[0].info.producer, &w[1].info.producer)
             && a != b
         {

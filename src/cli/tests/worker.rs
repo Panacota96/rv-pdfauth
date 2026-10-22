@@ -49,7 +49,8 @@ fn scan(fault: Option<&str>, extra_env: &[(&str, &str)]) -> Run {
     let mut c = Command::cargo_bin("rv-pdfauth").unwrap();
     c.env("RV_NO_TIMESTAMP", "1")
         .env_remove("RV_WORKER_TEST_FAULT")
-        .env_remove("RV_WORKER_TEST_TIMEOUT_S");
+        .env_remove("RV_WORKER_TEST_TIMEOUT_S")
+        .env_remove("RV_WORKER_TEST_NO_NETNS");
     if let Some(f) = fault {
         c.env("RV_WORKER_TEST_FAULT", f);
     }
@@ -168,6 +169,38 @@ fn worker_success_outputs_are_audited() {
     } else {
         eprintln!("PDFium not found by the worker: visual part not checked (set RV_PDFIUM_PATH)");
         assert_eq!(summary["visual"]["status"], "skipped");
+    }
+}
+
+/// The worker's network isolation is recorded in the audit (`details.worker.network`): on Linux an own
+/// network namespace when the kernel permits it, otherwise the logged fallback; elsewhere `isolated: false`.
+#[test]
+fn worker_network_isolation_and_rehash_are_audited() {
+    let r = scan(None, &[]);
+    let a = &r.analyzed("contract.pdf")["details"]["analysis"];
+    assert_eq!(a["worker"]["status"], "completed", "{a}");
+    assert_eq!(a["evidence_rehash"]["match"], true, "{a}");
+    let net = &a["worker"]["network"];
+    if cfg!(target_os = "linux") {
+        if net["isolated"] == true {
+            assert_eq!(net["method"], "linux_netns", "{net}");
+        } else {
+            assert_eq!(net["method"], "none", "{net}");
+            assert!(
+                net["detail"].as_str().unwrap().contains("fallback"),
+                "{net}"
+            );
+            eprintln!("network namespace not permitted on this host: fallback recorded");
+        }
+    } else {
+        assert_eq!(net["isolated"], false, "{net}");
+        assert_eq!(net["method"], "none");
+    }
+    if cfg!(all(debug_assertions, target_os = "linux")) {
+        let r = scan(None, &[("RV_WORKER_TEST_NO_NETNS", "1")]);
+        let net = &r.analyzed("contract.pdf")["details"]["analysis"]["worker"]["network"];
+        assert_eq!(net["isolated"], false, "{net}");
+        assert!(net["detail"].as_str().unwrap().contains("not requested"));
     }
 }
 

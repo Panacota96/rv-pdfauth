@@ -44,7 +44,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.TAG || github.sha }}
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Toolchain pinned in rust-toolchain.toml
+        id: toolchain
+        shell: bash
+        run: echo "channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.toolchain.outputs.channel }}
       - name: Build (static CRT, see .cargo/config.toml)
         run: cargo build --release --locked -p rv-pdfauth-cli -p rv-pdfauth-gui
       - name: PDFium next to the executables (pinned tag + SHA-256 in third_party/pdfium/PDFIUM_VERSION.txt)
@@ -95,7 +101,10 @@ jobs:
       - name: Installer (Inno Setup, preinstalled on windows-latest)
         shell: pwsh
         run: |
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=${{ steps.v.outputs.version }} /DSourceDir=$PWD /O$PWD\dist packaging\windows\installer.iss
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; if ($LASTEXITCODE -ne 0) { exit 1 } }
+          & $iscc /DAppVersion=${{ steps.v.outputs.version }} /DSourceDir=$PWD /O$PWD\dist packaging\windows\installer.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
       - name: Code signing of the installer (runs only when the SIGN_PFX_BASE64 secret exists)
         if: env.SIGN_ENABLED == 'true'
         shell: pwsh

@@ -67,9 +67,10 @@ sequenceDiagram
 - The token is stored next to the log: `timestamp-<N>.tsr` (DER) and `timestamp-<N>.json` (readable summary).
 - Offline or air-gapped: the run still completes. When the network is back, `rv-pdfauth timestamp <log folder>`
   re-verifies the chain and appends `timestamp_obtained` — earlier entries are never rewritten.
-- `verify-log` checks each token: its file digest, the TSA status, imprint = stored head, and entry `#N` still has
-  that hash. It does **not** verify the TSA's signature or certificate chain: do that with OpenSSL
-  ([usage.md](usage.md#6-timestamps)) before relying on the time in court.
+- `verify-log` checks each token: its file digest, the TSA status, imprint = stored head, entry `#N` still has
+  that hash, and the TSA's CMS signature (signer certificate in the token, ESS binding, message digest, RSA
+  signature, timeStamping EKU). `--tsa-ca <CA bundle>` also validates the certificate chain; otherwise the output
+  says *chain not validated*. Revocation is not checked ([usage.md](usage.md#6-timestamps)).
 - Independent check: `openssl ts -verify -digest <head> -in timestamp-<N>.tsr -CAfile <TSA chain>`.
 - `--no-timestamp` (or `RV_NO_TIMESTAMP=1`) disables it; tests use a local TSA (`tests/fake_tsa.py`).
 - **Limitation:** a timestamp proves the log existed at that time, not that its content is true.
@@ -88,8 +89,13 @@ digests are in the audit chain, which is timestamped.
 `--jurisdiction co` (default) writes, for each item, a Colombian *registro de cadena de custodia* in Spanish
 (fields of the Fiscalía manual, Ley 906 de 2004); `--jurisdiction fr` a French *fiche de scellé / suivi* in French
 (Code de procédure pénale art. 156 ff.). An English version is always added. The form is pre-filled from the run
-(case, item, size, both digests, UTC times, tool, examiner, audit entries) and leaves signature lines for the
-physical transfers. This is a working aid, not legal advice: check it against the current official form.
+(case, item, size, both digests, UTC times, tool, examiner, audit entries). Blank cells are left to fill in by
+hand: a **persons** table (the examiner, two assistant and two witness rows, each with full name, position —
+*cargo* in Colombia, *qualité* in France —, ID document type and number, and signature) and the **transfer** rows
+(date and time, delivered by / received by with name, position, ID type and number and signature, purpose,
+condition of the packaging). `custody.json` carries the same fields as nullable values (`examiner_identity`,
+`assistants`, `witnesses`, `transfers`; schema `schemas/item-custody.schema.json`). This is a working aid, not
+legal advice: check it against the current official form.
 
 ## Actions recorded
 
@@ -104,7 +110,7 @@ physical transfers. This is a working aid, not legal advice: check it against th
 | `item_error` | unreadable item | error message |
 | `analysis_started` | each item | isolation (`worker_process` or `in_process`) |
 | `output_written` / `output_missing` | each derived file | kind, path under `items/`, size, digests (revisions, visual diffs, objects dump, embedded files) |
-| `item_analyzed` | each item | detected type, extension, findings, status; `analysis`: fingerprint databases (name, version, SHA-256), PDFium library (path, SHA-256, pinned tag), worker outcome, visual-diff status |
+| `item_analyzed` | each item | detected type, extension, findings, status; `analysis`: fingerprint databases (name, version, SHA-256), PDFium library (path, SHA-256, pinned tag), worker outcome, visual-diff status, `evidence_rehash` (second-pass digest of the parsed bytes vs the first pass) |
 | `item_cancelled` / `run_cancelled` | on cancel | processed count |
 | `duplicate_group` | after the loop | hash, item indexes |
 | `hash_register_written` | | digests of `hashes.csv` |

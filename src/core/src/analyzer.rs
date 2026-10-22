@@ -131,6 +131,10 @@ pub struct AnalyzeCtx<'a> {
     pub head: &'a [u8],
     pub item_dir: &'a std::path::Path,
     pub opts: &'a DomainOptions,
+    /// Digest of the first (hashing) pass with the run's primary algorithm. The PDF analysis re-hashes the
+    /// bytes it actually parses (the memory map, in the worker) and compares: a difference is the finding
+    /// `EVIDENCE_CHANGED_DURING_ANALYSIS`. None = no comparison (unit tests, items that are not PDFs).
+    pub expected_digest: Option<(crate::hash::HashAlgo, &'a str)>,
 }
 
 /// FROZEN entry point called by run.rs for every readable item. PDF candidates (`%PDF-` header or `.pdf`
@@ -155,7 +159,12 @@ pub fn audit_summary(details: &serde_json::Value) -> serde_json::Value {
         return serde_json::Value::Null;
     }
     let mut m = serde_json::Map::new();
-    for k in ["fingerprint_dbs", "worker", "revision_source"] {
+    for k in [
+        "fingerprint_dbs",
+        "worker",
+        "revision_source",
+        "evidence_rehash",
+    ] {
         if let Some(v) = details.get(k) {
             m.insert(k.into(), v.clone());
         }
@@ -321,23 +330,23 @@ pub fn analyze(file_name: &str, size: u64, head: &[u8]) -> Analysis {
     if size == 0 {
         findings.push(Finding::new("EMPTY_FILE", Severity::Info));
     }
-    if let (Some(s), Some(ext)) = (sig, extension.as_deref()) {
-        if !s.extensions.contains(&ext) {
-            if s.executable {
-                findings.push(
-                    Finding::new("EXECUTABLE_CONTENT", Severity::High)
-                        .with("detected", s.name)
-                        .with("extension", ext),
-                );
-            } else if known_extension(ext)
-                || matches!(ext, "txt" | "csv" | "log" | "xml" | "json" | "html")
-            {
-                findings.push(
-                    Finding::new("EXTENSION_MISMATCH", Severity::Medium)
-                        .with("detected", s.name)
-                        .with("extension", ext),
-                );
-            }
+    if let (Some(s), Some(ext)) = (sig, extension.as_deref())
+        && !s.extensions.contains(&ext)
+    {
+        if s.executable {
+            findings.push(
+                Finding::new("EXECUTABLE_CONTENT", Severity::High)
+                    .with("detected", s.name)
+                    .with("extension", ext),
+            );
+        } else if known_extension(ext)
+            || matches!(ext, "txt" | "csv" | "log" | "xml" | "json" | "html")
+        {
+            findings.push(
+                Finding::new("EXTENSION_MISMATCH", Severity::Medium)
+                    .with("detected", s.name)
+                    .with("extension", ext),
+            );
         }
     }
     Analysis {

@@ -3,7 +3,7 @@
 //! The parent (the run, which owns the audit log) starts one child per PDF:
 //!
 //! ```text
-//! <exe> worker --in <evidence> --item-dir <item folder> --opts <DomainOptions as JSON>
+//! <exe> worker --in <evidence> --item-dir <item folder> --opts <DomainOptions as JSON> [--expect-digest <algo>:<hex>]
 //! ```
 //!
 //! Protocol `rv-pdfauth-worker/1`:
@@ -17,6 +17,16 @@
 //!    `{"protocol": "rv-pdfauth-worker/1", "analysis": <Analysis>}`, then exits 0. It never touches the audit
 //!    log: the parent hashes and audits every output after the child has ended.
 //! 3. The parent enforces `worker_timeout_s` (kill), caps stdout at 64 MiB and keeps the last 4 KiB of stderr.
+//!
+//! **Network.** The worker code path (this module, `analyzer`, `pdfscan`, `visual`, `fingerprints`, `hash` and
+//! the `rv-pdfauth-pdf` / `rv-pdfauth-render` crates) contains no networking code and links no HTTP client
+//! (the HTTP client for RFC 3161 timestamps is confined to `trust.rs`, used by the parent only; tested by
+//! `worker_code_path_has_no_network_code`). On Linux the
+//! child is also moved into an empty network namespace in `pre_exec` (`unshare(CLONE_NEWNET)`, or
+//! `CLONE_NEWUSER | CLONE_NEWNET` when unprivileged user namespaces are allowed); when neither is permitted the
+//! analysis still runs and the fallback is recorded. The parent checks the child's `/proc/<pid>/ns/net` and
+//! records `details.worker.network = {isolated, method, detail}` (in the `item_analyzed` audit entry). Windows has
+//! no per-process network block for a Job Object: `isolated: false`, `method: "none"` is recorded there.
 //!
 //! Failure (timeout, crash, memory limit, bad JSON, cannot spawn/contain) → finding `PARSER_FAILED` (high;
 //! `reason`, `exit_code`) and `details.worker = {reason, exit_code, stderr_tail, …}`; the bulk run continues.
@@ -66,6 +76,16 @@ impl Failure {
     }
 }
 
+/// Linux: move the worker into its own network namespace. Debug builds honour `RV_WORKER_TEST_NO_NETNS=1`
+/// (tests of the fallback only).
+fn network_namespace_wanted() -> bool {
+    #[cfg(debug_assertions)]
+    if std::env::var_os("RV_WORKER_TEST_NO_NETNS").is_some_and(|v| v == "1") {
+        return false;
+    }
+    true
+}
+
 /// Timeout actually applied. Debug builds honour `RV_WORKER_TEST_TIMEOUT_S` (tests only).
 fn effective_timeout(configured: u64) -> u64 {
     #[cfg(debug_assertions)]
@@ -87,9 +107,10 @@ pub fn analyze_in_worker(exe: &Path, ctx: &AnalyzeCtx) -> Analysis {
         isolation: Isolation::InProcess,
         ..ctx.opts.clone()
     };
-    let outcome = spawn_and_wait(exe, ctx, &child_opts, timeout, mem_mb);
+    let mut network = Value::Null;
+    let outcome = spawn_and_wait(exe, ctx, &child_opts, timeout, mem_mb, &mut network);
     let limits = json!({"timeout_s": timeout.as_secs(), "memory_mb": mem_mb,
-        "elapsed_ms": started.elapsed().as_millis() as u64, "protocol": PROTOCOL});
+        "elapsed_ms": started.elapsed().as_millis() as u64, "protocol": PROTOCOL, "network": network});
     match outcome {
         Ok(a) => accept(a, ctx.item_dir, limits),
         Err(f) => failed(ctx, f, limits),
@@ -118,6 +139,7 @@ fn spawn_and_wait(
     child_opts: &DomainOptions,
     timeout: Duration,
     mem_mb: u64,
+    network: &mut Value,
 ) -> Result<Analysis, Failure> {
     let opts_json = serde_json::to_string(child_opts)
         .map_err(|e| Failure::new("spawn_failed", e.to_string()))?;
@@ -128,11 +150,16 @@ fn spawn_and_wait(
         .arg("--item-dir")
         .arg(ctx.item_dir)
         .arg("--opts")
-        .arg(&opts_json)
-        .stdin(Stdio::piped())
+        .arg(&opts_json);
+    if let Some((algo, hex)) = ctx.expected_digest {
+        cmd.arg("--expect-digest")
+            .arg(format!("{}:{}", algo.name(), hex));
+    }
+    cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    sys::configure(&mut cmd, mem_mb);
+    let netns = network_namespace_wanted();
+    sys::configure(&mut cmd, mem_mb, netns);
     let mut child = cmd.spawn().map_err(|e| {
         Failure::new(
             "spawn_failed",
@@ -148,6 +175,8 @@ fn spawn_and_wait(
             return Err(Failure::new("isolation_failed", e));
         }
     };
+    // Checked before the go line: the child has not opened the evidence yet.
+    *network = sys::network_status(&child, netns);
     let mut stdout = child.stdout.take();
     let out_t = std::thread::spawn(move || {
         let mut buf = Vec::new();
@@ -259,14 +288,14 @@ fn files_under(dir: &Path) -> Vec<String> {
             };
             if md.is_dir() {
                 walk(base, &p, out);
-            } else if md.is_file() {
-                if let Ok(rel) = p.strip_prefix(base) {
-                    let parts: Vec<String> = rel
-                        .components()
-                        .map(|c| c.as_os_str().to_string_lossy().into_owned())
-                        .collect();
-                    out.push(parts.join("/"));
-                }
+            } else if md.is_file()
+                && let Ok(rel) = p.strip_prefix(base)
+            {
+                let parts: Vec<String> = rel
+                    .components()
+                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                    .collect();
+                out.push(parts.join("/"));
             }
         }
     }
@@ -398,12 +427,26 @@ fn run_child(
     stderr: &mut dyn Write,
 ) -> i32 {
     let (mut input, mut item_dir, mut opts) = (None, None, None);
+    let mut expect: Option<(crate::hash::HashAlgo, String)> = None;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.to_str() {
             Some("--in") => input = it.next().map(PathBuf::from),
             Some("--item-dir") => item_dir = it.next().map(PathBuf::from),
             Some("--opts") => opts = it.next().and_then(|s| s.to_str()).map(String::from),
+            Some("--expect-digest") => {
+                let v = it.next().and_then(|s| s.to_str()).unwrap_or_default();
+                match v
+                    .split_once(':')
+                    .and_then(|(a, h)| Some((crate::hash::HashAlgo::parse(a)?, h.to_string())))
+                {
+                    Some(x) => expect = Some(x),
+                    None => {
+                        let _ = writeln!(stderr, "rv-pdfauth worker: bad --expect-digest {:?}", v);
+                        return 2;
+                    }
+                }
+            }
             _ => {
                 let _ = writeln!(stderr, "rv-pdfauth worker: unexpected argument {:?}", a);
                 return 2;
@@ -463,6 +506,7 @@ fn run_child(
         head: &head,
         item_dir: &item_dir,
         opts: &opts,
+        expected_digest: expect.as_ref().map(|(a, h)| (*a, h.as_str())),
     });
     let reply = Reply {
         protocol: PROTOCOL.into(),
@@ -500,7 +544,9 @@ mod sys {
 
     pub struct Guard;
 
-    pub fn configure(cmd: &mut Command, mem_mb: u64) {
+    pub fn configure(cmd: &mut Command, mem_mb: u64, netns: bool) {
+        #[cfg(not(target_os = "linux"))]
+        let _ = netns;
         // SAFETY: only async-signal-safe libc calls between fork and exec.
         unsafe {
             cmd.pre_exec(move || {
@@ -519,9 +565,41 @@ mod sys {
                         return Err(std::io::Error::last_os_error());
                     }
                 }
+                // Empty network namespace (loopback only, down). Not fatal when refused: the parent
+                // records the outcome (network_status) and the worker has no network code anyway.
+                #[cfg(target_os = "linux")]
+                if netns && libc::unshare(libc::CLONE_NEWNET) != 0 {
+                    let _ = libc::unshare(libc::CLONE_NEWUSER | libc::CLONE_NEWNET);
+                }
                 Ok(())
             });
         }
+    }
+
+    /// Whether the child really runs in another network namespace than this process.
+    #[cfg(target_os = "linux")]
+    pub fn network_status(child: &Child, attempted: bool) -> serde_json::Value {
+        use serde_json::json;
+        let own = std::fs::read_link("/proc/self/ns/net");
+        let theirs = std::fs::read_link(format!("/proc/{}/ns/net", child.id()));
+        match (own, theirs) {
+            (Ok(a), Ok(b)) if a != b => json!({"isolated": true, "method": "linux_netns",
+                "detail": "unshare(CLONE_NEWNET) in pre_exec: own network namespace without interfaces"}),
+            (Ok(_), Ok(_)) => json!({"isolated": false, "method": "none",
+            "detail": if attempted {
+                "fallback: unshare(CLONE_NEWNET) not permitted (needs CAP_SYS_ADMIN or unprivileged user namespaces); the worker has no network code"
+            } else {
+                "network namespace not requested (RV_WORKER_TEST_NO_NETNS, debug builds)"
+            }}),
+            (a, b) => json!({"isolated": null, "method": "unknown",
+                "detail": format!("cannot compare network namespaces: {:?} / {:?}", a.err(), b.err())}),
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    pub fn network_status(_child: &Child, _attempted: bool) -> serde_json::Value {
+        serde_json::json!({"isolated": false, "method": "none",
+            "detail": "no per-process network namespace on this OS; the worker has no network code"})
     }
 
     /// Limits are already applied in `pre_exec`.
@@ -556,8 +634,15 @@ mod sys {
         }
     }
 
-    pub fn configure(cmd: &mut Command, _mem_mb: u64) {
+    pub fn configure(cmd: &mut Command, _mem_mb: u64, _netns: bool) {
         cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    /// A Job Object limits memory and lifetime but cannot block network access; the worker code path has no
+    /// network code (no HTTP client linked into it), which a test checks.
+    pub fn network_status(_child: &Child, _attempted: bool) -> serde_json::Value {
+        serde_json::json!({"isolated": false, "method": "none",
+            "detail": "Windows: no OS network block for the worker (a Job Object cannot restrict network access); the worker code path has no network code"})
     }
 
     fn last_error(what: &str) -> String {
@@ -599,6 +684,69 @@ mod sys {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The code a worker process runs contains no networking: no HTTP client, no sockets. `ureq` (RFC 3161
+    /// timestamps) is confined to `trust.rs`, which only the parent uses, and the PDF / render crates do not
+    /// depend on any networking crate.
+    #[test]
+    fn worker_code_path_has_no_network_code() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let forbidden = [
+            "ureq",
+            "std::net",
+            "TcpStream",
+            "UdpSocket",
+            "TcpListener",
+            "reqwest",
+            "hyper",
+            "trust::",
+            "request_timestamp",
+        ];
+        let mut files: Vec<PathBuf> = [
+            "worker.rs",
+            "analyzer.rs",
+            "pdfscan.rs",
+            "visual.rs",
+            "fingerprints.rs",
+            "hash.rs",
+        ]
+        .iter()
+        .map(|f| root.join("src").join(f))
+        .collect();
+        for krate in ["../pdf/src", "../render/src"] {
+            for e in std::fs::read_dir(root.join(krate)).unwrap() {
+                let p = e.unwrap().path();
+                if p.extension().is_some_and(|x| x == "rs") {
+                    files.push(p);
+                }
+            }
+        }
+        for f in &files {
+            let text = std::fs::read_to_string(f).unwrap();
+            // This test names the forbidden words itself: skip its own module.
+            let text = text.split("#[cfg(test)]").next().unwrap_or_default();
+            for w in forbidden {
+                assert!(!text.contains(w), "{} mentions {}", f.display(), w);
+            }
+        }
+        for manifest in ["../pdf/Cargo.toml", "../render/Cargo.toml"] {
+            let text = std::fs::read_to_string(root.join(manifest)).unwrap();
+            for w in ["ureq", "reqwest", "hyper", "curl"] {
+                assert!(!text.contains(w), "{} depends on {}", manifest, w);
+            }
+        }
+        // ureq appears in the core only in trust.rs (parent side).
+        for e in std::fs::read_dir(root.join("src")).unwrap() {
+            let p = e.unwrap().path();
+            if p.extension().is_some_and(|x| x == "rs")
+                && p.file_name().is_some_and(|n| n != "trust.rs")
+            {
+                let text = std::fs::read_to_string(&p).unwrap();
+                let text = text.split("#[cfg(test)]").next().unwrap_or_default();
+                assert!(!text.contains("ureq"), "{} uses ureq", p.display());
+            }
+        }
+    }
 
     #[test]
     fn relative_paths_must_stay_inside_the_item_folder() {
@@ -665,6 +813,7 @@ mod tests {
                 head: b"%PDF-1.7\n",
                 item_dir: &item,
                 opts: &opts,
+                expected_digest: None,
             },
         );
         let f = a
@@ -718,6 +867,58 @@ mod tests {
             run_child(&["--bogus".into()], &mut &GO[..], &mut out, &mut err),
             2
         );
+    }
+
+    #[test]
+    fn worker_rehashes_the_mapped_evidence_against_the_first_pass() {
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/visual/one-revision.pdf");
+        let opts = serde_json::to_string(&DomainOptions {
+            visual_diff: false,
+            ..DomainOptions::default()
+        })
+        .unwrap();
+        let run = |expect: &str| {
+            let dir = tempfile::tempdir().unwrap();
+            let args: Vec<std::ffi::OsString> = vec![
+                "--in".into(),
+                fixture.clone().into(),
+                "--item-dir".into(),
+                dir.path().into(),
+                "--opts".into(),
+                opts.clone().into(),
+                "--expect-digest".into(),
+                expect.into(),
+            ];
+            let (mut out, mut err) = (Vec::new(), Vec::new());
+            let rc = run_child(&args, &mut &GO[..], &mut out, &mut err);
+            (rc, out, String::from_utf8_lossy(&err).into_owned())
+        };
+        let good = crate::hash::hash_bytes(
+            &std::fs::read(&fixture).unwrap(),
+            crate::hash::HashAlgo::Blake3,
+        );
+        let (rc, out, err) = run(&format!("blake3:{}", good));
+        assert_eq!(rc, 0, "{}", err);
+        let reply: Reply = serde_json::from_slice(&out).unwrap();
+        assert_eq!(reply.analysis.details["evidence_rehash"]["match"], true);
+        assert_eq!(
+            reply.analysis.details["evidence_rehash"]["algorithm"],
+            "blake3"
+        );
+        let (rc, out, _) = run(&format!("blake3:{}", "ab".repeat(32)));
+        assert_eq!(rc, 0);
+        let reply: Reply = serde_json::from_slice(&out).unwrap();
+        assert!(
+            reply
+                .analysis
+                .findings
+                .iter()
+                .any(|f| f.code == "EVIDENCE_CHANGED_DURING_ANALYSIS")
+        );
+        let (rc, _, err) = run("crc32:00");
+        assert_eq!(rc, 2);
+        assert!(err.contains("--expect-digest"));
     }
 
     #[test]

@@ -534,6 +534,7 @@ fn pipeline(
                     head: &out.head,
                     item_dir: &item_dir,
                     opts: &cfg.domain,
+                    expected_digest: out.digests.first().map(|(a, h)| (*a, h.as_str())),
                 });
                 for o in &a.outputs {
                     let p = item_dir.join(&o.rel_path);
@@ -828,16 +829,16 @@ fn case_check_item(
     let norm = case::normalize_path(&result.path);
     let path_s = result.path.display().to_string();
     if role == CaseRole::Intake {
-        if let Some(prev) = l.case.find_by_path(&norm) {
-            if matches!(
+        if let Some(prev) = l.case.find_by_path(&norm)
+            && matches!(
                 case::compare(&prev.hashes, &result.hashes),
                 Comparison::Mismatch { .. }
-            ) {
-                result.findings.push(
-                    Finding::new("REGISTRY_PATH_CONTENT_CHANGED", Severity::Medium)
-                        .with("previous_id", prev.evidence_id.clone()),
-                );
-            }
+            )
+        {
+            result.findings.push(
+                Finding::new("REGISTRY_PATH_CONTENT_CHANGED", Severity::Medium)
+                    .with("previous_id", prev.evidence_id.clone()),
+            );
         }
         return Ok(());
     }

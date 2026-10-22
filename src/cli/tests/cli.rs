@@ -266,6 +266,83 @@ fn executable_under_another_name_exits_3() {
 }
 
 #[test]
+fn custody_form_has_identification_fields_for_both_jurisdictions() {
+    let ev = tempfile::tempdir().unwrap();
+    std::fs::write(ev.path().join("notes.txt"), b"plain text evidence").unwrap();
+    for (j, lang, words) in [
+        (
+            "co",
+            "es",
+            [
+                "Cargo",
+                "Tipo de documento de identidad",
+                "Testigo",
+                "Auxiliar",
+            ],
+        ),
+        (
+            "fr",
+            "fr",
+            [
+                "Qualité / fonction",
+                "Type de pièce d'identité",
+                "Témoin",
+                "Assistant",
+            ],
+        ),
+    ] {
+        let out = tempfile::tempdir().unwrap();
+        bin()
+            .args(["analyze", "-i"])
+            .arg(ev.path())
+            .args([
+                "--jurisdiction",
+                j,
+                "--actor",
+                "Ana Ruiz",
+                "--progress",
+                "none",
+                "-o",
+            ])
+            .arg(out.path())
+            .assert()
+            .code(0);
+        let item = only_dir(&only_dir(&out.path().join("reports")).join("items"));
+        let html = std::fs::read_to_string(item.join(format!("custody.{}.html", lang))).unwrap();
+        let html = html
+            .replace("&#x27;", "'")
+            .replace("&#39;", "'")
+            .replace("&#x2f;", "/");
+        for w in words {
+            assert!(html.contains(w), "{} form lacks {:?}", j, w);
+        }
+        let en = std::fs::read_to_string(item.join("custody.en.html"))
+            .unwrap()
+            .replace("&#x2f;", "/");
+        for w in [
+            "Position / capacity",
+            "ID document type",
+            "ID document number",
+            "Witness",
+            "Assistant",
+            "Examiner: Ana Ruiz",
+        ] {
+            assert!(en.contains(w), "{} English form lacks {:?}", j, w);
+        }
+        let pdf = std::fs::read(item.join(format!("custody.{}.pdf", lang))).unwrap();
+        assert!(pdf.starts_with(b"%PDF-"));
+        let json: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(item.join("custody.json")).unwrap()).unwrap();
+        assert_eq!(json["examiner_identity"]["name"], "Ana Ruiz");
+        for k in ["position", "id_type", "id_number"] {
+            assert!(json["examiner_identity"][k].is_null(), "{}", k);
+        }
+        assert_eq!(json["assistants"], serde_json::json!([]));
+        assert_eq!(json["witnesses"], serde_json::json!([]));
+    }
+}
+
+#[test]
 fn self_test_passes() {
     bin()
         .arg("self-test")

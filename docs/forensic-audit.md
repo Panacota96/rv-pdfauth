@@ -88,8 +88,13 @@ digests are in the audit chain, which is timestamped.
 `--jurisdiction co` (default) writes, for each item, a Colombian *registro de cadena de custodia* in Spanish
 (fields of the Fiscalía manual, Ley 906 de 2004); `--jurisdiction fr` a French *fiche de scellé / suivi* in French
 (Code de procédure pénale art. 156 ff.). An English version is always added. The form is pre-filled from the run
-(case, item, size, both digests, UTC times, tool, examiner, audit entries) and leaves signature lines for the
-physical transfers. This is a working aid, not legal advice: check it against the current official form.
+(case, item, size, both digests, UTC times, tool, examiner, audit entries). Blank cells are left to fill in by
+hand: a **persons** table (the examiner, two assistant and two witness rows, each with full name, position —
+*cargo* in Colombia, *qualité* in France —, ID document type and number, and signature) and the **transfer** rows
+(date and time, delivered by / received by with name, position, ID type and number and signature, purpose,
+condition of the packaging). `custody.json` carries the same fields as nullable values (`examiner_identity`,
+`assistants`, `witnesses`, `transfers`; schema `schemas/item-custody.schema.json`). This is a working aid, not
+legal advice: check it against the current official form.
 
 ## Actions recorded
 

@@ -135,6 +135,7 @@ flowchart TB
 | [docs/forensic-audit.md](docs/forensic-audit.md) | Audit trail, hash chain, evidence handling, ISO/IEC 27037 mapping |
 | [docs/reports.md](docs/reports.md) | Report kinds, fields, JSON schemas, languages |
 | [docs/development.md](docs/development.md) | Building, testing, CI/CD and releasing |
+| [docs/release-process.md](docs/release-process.md) | Windows packages, code signing and GitHub releases, step by step |
 | [docs/adr/](docs/adr/) | Architecture decisions (e.g. why Rust) |
 
 ## Project layout

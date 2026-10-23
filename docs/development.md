@@ -117,6 +117,8 @@ Unsigned executables trigger SmartScreen warnings. Options (decide per legal ent
 
 Signing is a step in `release.yml` guarded by `if: secrets…` so unsigned builds still work for testing.
 
+Full procedure (secrets, signing certificate, test packages, rebuilding a release, manual packaging): [release-process.md](release-process.md).
+
 ### Release checklist (manual)
 
 - [ ] `rv-pdfauth self-test` on the released exe passes on Windows 10 **and** Windows 11

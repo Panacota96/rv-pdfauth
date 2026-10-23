@@ -65,13 +65,20 @@ jobs:
           SIGN_PFX_BASE64: ${{ secrets.SIGN_PFX_BASE64 }}
           SIGN_PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
         run: |
-          # OV/EV certificate as base64 PFX in repository secrets. Alternative for the French entity:
-          # Azure Artifact Signing (azure/artifact-signing-action) instead of this step.
+          # Internal Rakvor code-signing certificate (base64 PFX in repository secrets; its root CA is
+          # packaging/signing/rakvor-code-signing-root.cer and is installed on Rakvor machines). Publicly trusted
+          # certificates need an HSM-held key: switch to Azure Artifact Signing (azure/artifact-signing-action) then.
           $pfx = Join-Path $env:RUNNER_TEMP "sign.pfx"
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGN_PFX_BASE64))
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
           Get-ChildItem target\release\rv-pdfauth.exe, target\release\rv-pdfauth-gui.exe | ForEach-Object {
             & $signtool.FullName sign /f $pfx /p $env:SIGN_PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+          # Prove the signatures chain to the Rakvor root (imported on the runner only for this check).
+          Import-Certificate -FilePath packaging\signing\rakvor-code-signing-root.cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+          Get-ChildItem target\release\rv-pdfauth.exe, target\release\rv-pdfauth-gui.exe | ForEach-Object {
+            & $signtool.FullName verify /pa /tw $_.FullName
             if ($LASTEXITCODE -ne 0) { exit 1 }
           }
           Remove-Item $pfx
@@ -112,13 +119,21 @@ jobs:
           SIGN_PFX_BASE64: ${{ secrets.SIGN_PFX_BASE64 }}
           SIGN_PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
         run: |
-          # OV/EV certificate as base64 PFX in repository secrets. Alternative for the French entity:
-          # Azure Artifact Signing (azure/artifact-signing-action) instead of this step.
+          # Internal Rakvor code-signing certificate (base64 PFX in repository secrets; its root CA is
+          # packaging/signing/rakvor-code-signing-root.cer and is installed on Rakvor machines). Publicly trusted
+          # certificates need an HSM-held key: switch to Azure Artifact Signing (azure/artifact-signing-action) then.
           $pfx = Join-Path $env:RUNNER_TEMP "sign.pfx"
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGN_PFX_BASE64))
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
           Get-ChildItem dist\*-setup.exe | ForEach-Object {
             & $signtool.FullName sign /f $pfx /p $env:SIGN_PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+          # Prove the signatures chain to the Rakvor root (imported on the runner only for this check).
+          # root already imported by the executables step in this job
+          Import-Certificate -FilePath packaging\signing\rakvor-code-signing-root.cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+          Get-ChildItem dist\*-setup.exe | ForEach-Object {
+            & $signtool.FullName verify /pa /tw $_.FullName
             if ($LASTEXITCODE -ne 0) { exit 1 }
           }
           Remove-Item $pfx

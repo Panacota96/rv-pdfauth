@@ -92,7 +92,25 @@ CLI can also download the attestation bundle and trusted root for offline checks
 ## 4. Verify the Authenticode signature (signed releases)
 
 The release workflow signs `rv-pdfauth.exe`, `rv-pdfauth-gui.exe` and the installer **only when a code-signing
-certificate is configured** for the repository. Check:
+certificate is configured** for the repository. Releases are signed with Rakvor's **internal** code-signing
+certificate ("Rakvor Code Signing (internal)", issued by "Rakvor Internal Code Signing Root CA"). It is not a public
+certificate: Windows trusts it only on machines where the Rakvor root is installed — Rakvor's own laptops, since the
+tool is used locally and not distributed. Auditors and customers verify releases with steps 2–3 and can inspect the
+signature with the root's fingerprint below.
+
+Install the root once per Rakvor machine (PowerShell as the user who runs the tool; the file is
+`packaging/signing/rakvor-code-signing-root.cer` in the repository):
+
+```powershell
+# Check the fingerprint first — it must be exactly:
+#   SHA-256 DC9BA1A2FCD4F0633C5214B7CCEB25BED8F3F7D9EBAF111590250CBCAA83DF60
+(New-Object System.Security.Cryptography.X509Certificates.X509Certificate2 .\rakvor-code-signing-root.cer).GetCertHashString('SHA256')
+Import-Certificate -FilePath .\rakvor-code-signing-root.cer -CertStoreLocation Cert:\CurrentUser\Root
+```
+
+Windows shows a confirmation dialog for the new root; accept it only if the fingerprint matched. Without the root,
+`Get-AuthenticodeSignature` reports `UnknownError` (chain to an untrusted root) and SmartScreen may still warn on
+first run. Check:
 
 ```powershell
 Get-AuthenticodeSignature .\rv-pdfauth-0.1.0-windows-x64-setup.exe |
@@ -103,7 +121,8 @@ Get-AuthenticodeSignature .\rv-pdfauth.exe, .\rv-pdfauth-gui.exe | Format-Table 
 
 | Status | Meaning |
 | --- | --- |
-| `Valid` | Signed and intact; check that the signer is the expected Rakvor entity |
+| `Valid` | Signed and intact; the signer must be "Rakvor Code Signing (internal)" |
+| `UnknownError` | Signed, but the Rakvor root is not installed on this machine (install it as above) |
 | `NotSigned` | The release was built without a signing certificate: rely on steps 2–3; Windows SmartScreen will warn |
 | `HashMismatch` / other | Stop: the file was altered after signing |
 

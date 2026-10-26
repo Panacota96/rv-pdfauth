@@ -44,6 +44,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.TAG || github.sha }}
+      - name: Signing root from the workflow's commit (older tags predate packaging/signing/)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: _signing
+          sparse-checkout: packaging/signing
       - name: Toolchain pinned in rust-toolchain.toml
         id: toolchain
         shell: bash
@@ -76,7 +82,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit 1 }
           }
           # Prove the signatures chain to the Rakvor root (imported on the runner only for this check).
-          Import-Certificate -FilePath packaging\signing\rakvor-code-signing-root.cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+          Import-Certificate -FilePath _signing\packaging\signing\rakvor-code-signing-root.cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
           Get-ChildItem target\release\rv-pdfauth.exe, target\release\rv-pdfauth-gui.exe | ForEach-Object {
             & $signtool.FullName verify /pa /tw $_.FullName
             if ($LASTEXITCODE -ne 0) { exit 1 }
@@ -130,8 +136,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit 1 }
           }
           # Prove the signatures chain to the Rakvor root (imported on the runner only for this check).
-          # root already imported by the executables step in this job
-          Import-Certificate -FilePath packaging\signing\rakvor-code-signing-root.cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+          Import-Certificate -FilePath _signing\packaging\signing\rakvor-code-signing-root.cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
           Get-ChildItem dist\*-setup.exe | ForEach-Object {
             & $signtool.FullName verify /pa /tw $_.FullName
             if ($LASTEXITCODE -ne 0) { exit 1 }

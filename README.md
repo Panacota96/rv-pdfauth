@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/brand/rv-mark.png" width="96" alt="Rakvor RV logo"></p>
+
 # RV PDFAuth
 
 <!-- forge:description -->
@@ -7,6 +9,8 @@
 [![CI](https://github.com/Panacota96/rv-pdfauth/actions/workflows/ci.yml/badge.svg)](https://github.com/Panacota96/rv-pdfauth/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-Rakvor%20source--auditable-6B00FF)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6)
+
+![Revision viewer: revision 1 vs 2 of a synthetic invoice, the changed amount highlighted](docs/images/gui-revision-viewer.png)
 
 ```mermaid
 flowchart LR

@@ -5,6 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Entries are generated from
 [Conventional Commits](https://www.conventionalcommits.org/) by release-please and reviewed by a human.
 
+## [0.3.0](https://github.com/Panacota96/rv-pdfauth/compare/v0.2.1...v0.3.0) (2026-10-27)
+
+
+### Features
+
+* **case:** one-step intake with RV HashInv (--intake hashinv) ([e18140e](https://github.com/Panacota96/rv-pdfauth/commit/e18140e35484fdebb1602aa2805a8528b4c406c8))
+
 ## [0.2.1](https://github.com/Panacota96/rv-pdfauth/compare/v0.2.0...v0.2.1) (2026-10-27)
 
 

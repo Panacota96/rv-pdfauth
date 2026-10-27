@@ -348,7 +348,7 @@ Also compare the visual-diff PNGs (identical with the same PDFium build and DPI)
 
 | Symptom | Cause and fix |
 | --- | --- |
-| SmartScreen "Windows protected your PC" | Unsigned release (step 4 `NotSigned`). Only after steps 2–3 pass: *More info → Run anyway*. |
+| SmartScreen "Windows protected your PC" (unknown publisher) | SmartScreen judges a file by the **reputation** of a publicly trusted certificate; the internal Rakvor root is not one, so the warning appears even when the signature is `Valid` (and always when `NotSigned`). Only after steps 2–4 pass: *More info → Run anyway*, or remove the downloaded-file mark first with `Unblock-File .\<file>` (do this on the zip **before** extracting it). It goes away for good only with a public certificate (see `docs/release-process.md` §5). |
 | `rv-pdfauth` is not recognised | PATH task not selected, or the terminal was opened before installing: open a new terminal or use the full path. |
 | Every multi-revision PDF shows `VISUAL_DIFF_SKIPPED` "PDFium library not found" | `pdfium.dll` missing next to the executables, quarantined by antivirus, or the wrong architecture. Restore it and re-check step 6, or set `RV_PDFIUM_PATH`. |
 | GUI window blank or very slow on a VM | No GPU driver: software rendering is used automatically; give the VM more CPU. |

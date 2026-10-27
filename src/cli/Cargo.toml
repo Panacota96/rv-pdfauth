@@ -25,3 +25,7 @@ assert_cmd.workspace = true
 predicates.workspace = true
 tempfile.workspace = true
 serde_json.workspace = true
+
+# Icon + version details in the Windows .exe (build.rs; does nothing on other platforms).
+[build-dependencies]
+winresource = "0.1"

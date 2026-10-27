@@ -5,6 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Entries are generated from
 [Conventional Commits](https://www.conventionalcommits.org/) by release-please and reviewed by a human.
 
+## [0.2.1](https://github.com/Panacota96/rv-pdfauth/compare/v0.2.0...v0.2.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* **windows:** Rakvor icon on the executables, shortcuts and window title bar ([e7f7667](https://github.com/Panacota96/rv-pdfauth/commit/e7f76679c90e7ca4594f1a6c401b59439636e8f1))
+
 ## [0.2.0](https://github.com/Panacota96/rv-pdfauth/compare/v0.1.0...v0.2.0) (2026-10-22)
 
 

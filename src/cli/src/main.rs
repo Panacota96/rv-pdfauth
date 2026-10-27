@@ -558,6 +558,37 @@ struct AnalyzeArgs {
         verbatim_doc_comment
     )]
     evidence: Vec<String>,
+
+    /// Register the evidence with the intake tool first: hashinv runs RV HashInv
+    /// (`rv-hashinv scan --case-dir`) on the same --input/--input-list, so the case gets its hash
+    /// inventory, hash reports and evidence registry from rv-hashinv itself; then every item is
+    /// analysed and verified against that registry. Needs --case-dir; not with --evidence.
+    /// rv-hashinv is searched in: --hashinv-exe, RV_HASHINV, next to rv-pdfauth, the RV HashInv
+    /// install folder, PATH. Its path, version and SHA-256 go into this run's audit log.
+    /// Default: none. Example: --case-dir E:\CASE-014 --case CASE-014 -i D:\evidence -r --intake hashinv
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = Intake::None,
+        requires = "case_dir",
+        hide_default_value = true,
+        hide_possible_values = true,
+        verbatim_doc_comment
+    )]
+    intake: Intake,
+
+    /// rv-hashinv executable for --intake hashinv (needs version 0.3.0 or later).
+    /// Default: searched (see --intake). Example: --hashinv-exe "C:\Tools\RV HashInv\rv-hashinv.exe"
+    #[arg(long, value_name = "EXE", verbatim_doc_comment)]
+    hashinv_exe: Option<PathBuf>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+enum Intake {
+    /// The case registry already exists (rv-hashinv was run before), or no case folder.
+    None,
+    /// Run rv-hashinv on the same evidence first.
+    Hashinv,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -781,7 +812,19 @@ fn analyze(a: AnalyzeArgs) -> u8 {
         Ok(ids) => ids,
         Err(e) => return usage_error(&e.message),
     };
-    if let Some(dir) = &a.case_dir {
+    let intake = a.intake == Intake::Hashinv;
+    if intake && !a.evidence.is_empty() {
+        return usage_error(
+            "--intake hashinv registers new evidence: it cannot be combined with --evidence",
+        );
+    }
+    if intake && a.inputs.is_empty() && a.input_list.is_none() {
+        return usage_error(
+            "--intake hashinv needs the evidence to register (--input or --input-list)",
+        );
+    }
+    // With --intake the case may not exist yet: rv-hashinv creates it, and the core checks it afterwards.
+    if let Some(dir) = a.case_dir.as_ref().filter(|_| !intake) {
         // Case problems found before the run map to their own exit codes (2 usage, 3 broken case).
         if let Err(e) = case::preflight(dir, a.case_id.as_deref(), &evidence_ids) {
             return match e.exit_code() {
@@ -839,6 +882,8 @@ fn analyze(a: AnalyzeArgs) -> u8 {
                 .unwrap_or_default(),
         },
         case_dir: a.case_dir.clone(),
+        intake_hashinv: intake,
+        hashinv_exe: a.hashinv_exe.clone(),
         evidence_ids,
         case_role: CASE_ROLE,
     };
@@ -887,6 +932,22 @@ fn analyze(a: AnalyzeArgs) -> u8 {
                     "warning: {}: {}",
                     path.as_deref().unwrap_or("-"),
                     message
+                )),
+                Event::IntakeStarted { version, path, .. } => {
+                    b.println(format!("intake: rv-hashinv {version} ({path}) registers the evidence"))
+                }
+                Event::IntakeProgress { done, total, .. } => {
+                    b.set_message(format!("intake {}/{} files", done, total))
+                }
+                Event::IntakeFinished {
+                    run_id,
+                    exit_code,
+                    items,
+                    report_dir,
+                    ..
+                } => b.println(format!(
+                    "intake: rv-hashinv run {run_id} finished (exit {exit_code}, {items} files); hash reports: {}",
+                    report_dir.as_deref().unwrap_or("-")
                 )),
                 Event::Cancelled { .. } => b.println("cancelled: writing partial reports..."),
                 Event::Timestamp { status, reason, .. } if status != "ok" => b.println(format!(

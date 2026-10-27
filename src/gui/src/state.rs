@@ -152,6 +152,14 @@ pub struct GuiState {
     pub case_dir: String,
     /// Evidence ids reported by the last run (case folder only).
     pub evidence: Vec<EvidenceLink>,
+    /// Case folder only: register the evidence with RV HashInv before analysing (`--intake hashinv`).
+    pub intake_hashinv: bool,
+    /// Result of looking for rv-hashinv when the option was switched on (path, version, SHA-256) or why not.
+    pub hashinv: Option<Result<rv_pdfauth_core::intake::IntakeTool, String>>,
+    /// Intake progress of the running job: (done, total).
+    pub intake_progress: Option<(u64, u64)>,
+    /// Where rv-hashinv wrote its hash reports in the last run.
+    pub intake_report_dir: Option<String>,
 }
 
 impl Default for GuiState {
@@ -183,6 +191,10 @@ impl Default for GuiState {
             viewer: Viewer::default(),
             case_dir: String::new(),
             evidence: vec![],
+            intake_hashinv: false,
+            hashinv: None,
+            intake_progress: None,
+            intake_report_dir: None,
         }
     }
 }
@@ -393,6 +405,32 @@ impl GuiState {
         }
     }
 
+    /// Switches the RV HashInv intake on or off; switching it on looks for rv-hashinv right away so the
+    /// window can say which copy will run (or why none can).
+    pub fn set_intake_hashinv(&mut self, on: bool) {
+        if self.intake_hashinv == on {
+            return;
+        }
+        self.intake_hashinv = on;
+        self.hashinv = on.then(|| rv_pdfauth_core::intake::locate(None));
+        let found = match &self.hashinv {
+            Some(Ok(t)) => {
+                json!({"path": t.path.display().to_string(), "version": t.version, "sha256": t.sha256})
+            }
+            Some(Err(e)) => json!({"error": e}),
+            None => Value::Null,
+        };
+        self.note(
+            "ui_intake_changed",
+            json!({"intake": if on { "hashinv" } else { "none" }, "hashinv": found}),
+        );
+    }
+
+    /// The intake runs only with a case folder.
+    pub fn intake_active(&self) -> bool {
+        self.intake_hashinv && self.out_locked()
+    }
+
     pub fn out_locked(&self) -> bool {
         !self.case_dir.trim().is_empty()
     }
@@ -439,12 +477,22 @@ impl GuiState {
 
     /// Builds the run configuration; the recorded UI actions become audit preamble entries.
     pub fn to_config(&self) -> Result<RunConfig, String> {
-        if self.inputs.is_empty() && !self.out_locked() {
+        if self.inputs.is_empty() && (!self.out_locked() || self.intake_active()) {
             return Err("Add at least one file or folder.".into());
         }
+        let hashinv_exe = if self.intake_active() {
+            match &self.hashinv {
+                Some(Ok(t)) => Some(t.path.clone()),
+                Some(Err(e)) => return Err(e.clone()),
+                None => None,
+            }
+        } else {
+            None
+        };
         hash::validate_selection(&self.selected)?;
         let case_id = Some(self.case_id.trim().to_string()).filter(|s| !s.is_empty());
-        if self.out_locked() {
+        // With the intake the case may not exist yet: rv-hashinv creates it and the core checks it afterwards.
+        if self.out_locked() && !self.intake_active() {
             case::preflight(
                 std::path::Path::new(self.case_dir.trim()),
                 case_id.as_deref(),
@@ -492,6 +540,14 @@ impl GuiState {
                 "case_dir={}",
                 if self.out_locked() {
                     self.case_dir.trim()
+                } else {
+                    "none"
+                }
+            ),
+            format!(
+                "intake={}",
+                if self.intake_active() {
+                    "hashinv"
                 } else {
                     "none"
                 }
@@ -557,6 +613,8 @@ impl GuiState {
             },
             evidence_ids: vec![],
             case_role: CASE_ROLE,
+            intake_hashinv: self.intake_active(),
+            hashinv_exe,
         })
     }
 
@@ -569,6 +627,8 @@ impl GuiState {
         self.results.clear();
         self.viewer = Viewer::default();
         self.evidence.clear();
+        self.intake_progress = None;
+        self.intake_report_dir = None;
         // Recorded actions now belong to this run's audit log.
         self.ui_actions.clear();
     }
@@ -584,6 +644,14 @@ impl GuiState {
                 self.progress.bytes_total = *total_bytes;
             }
             Event::ItemStarted { path, .. } => self.current_item = path.clone(),
+            Event::IntakeStarted { version, .. } => {
+                self.current_item = format!("RV HashInv {version}");
+                self.intake_progress = Some((0, 0));
+            }
+            Event::IntakeProgress { done, total, .. } => {
+                self.intake_progress = Some((*done, *total))
+            }
+            Event::IntakeFinished { report_dir, .. } => self.intake_report_dir = report_dir.clone(),
             Event::EvidenceLinked {
                 index,
                 path,

@@ -106,6 +106,10 @@ viewer header show each item's evidence id and registry check.
 
 On Windows, registry paths are compared without regard to upper/lower case (the file system is case-insensitive).
 
+**One step instead of two:** add `--intake hashinv` to the `analyze` command (or tick *Register the evidence
+with RV HashInv first* in the GUI) and rv-pdfauth runs rv-hashinv on the same evidence before analysing it.
+Details and rules: [case-folder.md](case-folder.md#one-step-intake-with-rv-hashinv).
+
 ### 2.2 Running `analyze` from the command line
 
 ```powershell

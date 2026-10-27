@@ -26,7 +26,7 @@ flowchart TD
 
 | Area | What it does |
 | --- | --- |
-| **1. Evidence** | *Add files…* and *Add folder…* open the Windows pickers. You can also drag files or folders onto the window (or onto the `rv-pdfauth-gui.exe` icon before it starts), or paste a path and press Enter. *Include subfolders* is on by default. Remove an entry with **x**. |
+| **1. Evidence** | *Add files…* and *Add folder…* open the Windows pickers. You can also drag files or folders onto the window (or onto the `rv-pdfauth-gui.exe` icon before it starts), or paste a path and press Enter. *Include subfolders* is on by default. Remove an entry with **x**. *Case folder* links the run to a shared case ([case-folder.md](case-folder.md)); once it is set, *Register the evidence with RV HashInv first* runs rv-hashinv on the same evidence before the analysis — the window shows the rv-hashinv version it found (hover: path and SHA-256) or, in red, why none can be used. During the intake a line shows *Intake (RV HashInv): n/N files*; afterwards **Open hash report** opens rv-hashinv's report. |
 | **2. Hash algorithms** | Tick one or two. When two are ticked, the others are disabled; you cannot untick the last one. |
 | **3. Options** | How deep the PDF analysis goes (see the table below). Defaults suit almost every case. |
 | **4. Reports** | Language (English, Español, Français, or all three), output folder, examiner name (defaults to your Windows user), optional case ID. |

@@ -759,3 +759,166 @@ sys.stdout.write("\nEXIT=%d\n" % os.waitstatus_to_exitcode(status))
     );
     assert!(text.contains("EXIT=1"), "{}", text);
 }
+
+// ---- --intake hashinv: rv-pdfauth runs the intake tool (rv-hashinv) first --------------------------
+
+/// A stand-in rv-hashinv: prints `version` for --version and exits with `scan_exit` for anything else.
+fn fake_hashinv(dir: &Path, version: &str, scan_exit: i32) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let p = dir.join("rv-hashinv.cmd");
+        std::fs::write(
+            &p,
+            format!(
+                "@echo off\r\nif \"%1\"==\"--version\" (echo rv-hashinv {version}& exit /b 0)\r\necho scan failed 1>&2\r\nexit /b {scan_exit}\r\n"
+            ),
+        )
+        .unwrap();
+        p
+    }
+    #[cfg(not(windows))]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let p = dir.join("rv-hashinv");
+        std::fs::write(
+            &p,
+            format!(
+                "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo \"rv-hashinv {version}\"; exit 0; fi\necho 'scan failed' >&2\nexit {scan_exit}\n"
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        p
+    }
+}
+
+#[test]
+fn intake_option_rules_are_usage_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let case = dir.path().join("case");
+    // needs --case-dir
+    bin()
+        .args(["analyze", "-i"])
+        .arg(sample())
+        .args(["--intake", "hashinv"])
+        .assert()
+        .code(2);
+    // needs evidence to register
+    bin()
+        .args(["analyze", "--case-dir"])
+        .arg(&case)
+        .args(["--intake", "hashinv"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("needs the evidence to register"));
+    // cannot be combined with --evidence
+    bin()
+        .args(["analyze", "-i"])
+        .arg(sample())
+        .arg("--case-dir")
+        .arg(&case)
+        .args(["--intake", "hashinv", "--evidence", "E0001"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains(
+            "cannot be combined with --evidence",
+        ));
+    assert!(
+        !case.exists(),
+        "a refused run must not create the case folder"
+    );
+}
+
+#[test]
+fn intake_refuses_missing_old_or_failing_hashinv_and_analyses_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let case = dir.path().join("case");
+    let run = |exe: &Path| {
+        bin()
+            .args(["analyze", "-i"])
+            .arg(sample())
+            .arg("--case-dir")
+            .arg(&case)
+            .args([
+                "--case",
+                "CASE-INTAKE",
+                "--intake",
+                "hashinv",
+                "--hashinv-exe",
+            ])
+            .arg(exe)
+            .assert()
+            .code(1)
+    };
+    run(&dir.path().join("missing-rv-hashinv"))
+        .stderr(predicate::str::contains("rv-hashinv not found"));
+    let old = tempfile::tempdir().unwrap();
+    run(&fake_hashinv(old.path(), "0.2.0", 0))
+        .stderr(predicate::str::contains("needs rv-hashinv ≥ 0.3.0"));
+    let failing = tempfile::tempdir().unwrap();
+    run(&fake_hashinv(failing.path(), "0.3.1", 1)).stderr(predicate::str::contains(
+        "intake failed (exit code 1); nothing was analysed",
+    ));
+    assert!(
+        !case.join("runs").join(TOOL).exists(),
+        "no rv-pdfauth run may start when the intake did not finish"
+    );
+}
+
+/// Full chain with the real rv-hashinv (set RV_HASHINV_TEST to its executable; skipped otherwise —
+/// the repositories are separate, so CI provides it only when it can build rv-hashinv).
+#[test]
+fn intake_with_real_hashinv_registers_then_verifies_every_item() {
+    let Some(exe) = std::env::var_os("RV_HASHINV_TEST").map(PathBuf::from) else {
+        eprintln!("skipping: set RV_HASHINV_TEST to an rv-hashinv ≥ 0.3.0 executable");
+        return;
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let case = dir.path().join("case");
+    let out = bin()
+        .args(["analyze", "-i"])
+        .arg(sample())
+        .arg("--case-dir")
+        .arg(&case)
+        .args([
+            "--case",
+            "CASE-INTAKE",
+            "--jurisdiction",
+            "fr",
+            "--intake",
+            "hashinv",
+            "--progress",
+            "jsonl",
+        ])
+        .arg("--hashinv-exe")
+        .arg(&exe)
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(matches!(out.status.code(), Some(0) | Some(3)), "{stdout}");
+    assert!(stdout.contains("\"event\":\"intake_started\""));
+    assert!(stdout.contains("\"event\":\"intake_finished\""));
+    assert!(
+        !stdout.contains("\"status\":\"not_in_registry\""),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("\"status\":\"mismatch\""), "{stdout}");
+    // Both tools' runs are in the case, and the delegation opens rv-pdfauth's audit log.
+    assert!(
+        only_dir(&case.join("runs/rv-hashinv"))
+            .join("reports")
+            .is_dir()
+    );
+    let audit =
+        std::fs::read_to_string(only_dir(&case.join("runs").join(TOOL)).join("logs/audit.jsonl"))
+            .unwrap();
+    assert!(audit.contains("\"action\":\"intake_delegated\""));
+    assert!(audit.contains("\"sha256\""));
+    bin().arg("verify-case").arg(&case).assert().code(0);
+    std::process::Command::new(&exe)
+        .args(["verify-case", "--rehash"])
+        .arg(&case)
+        .status()
+        .map(|s| assert!(s.success()))
+        .unwrap();
+}

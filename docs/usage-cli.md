@@ -253,6 +253,21 @@ Options:
           Default: none (the --input files, or every registered item)
           Example: --evidence E0001,E0007
 
+      --intake <INTAKE>
+          Register the evidence with the intake tool first: hashinv runs RV HashInv
+          (`rv-hashinv scan --case-dir`) on the same --input/--input-list, so the case gets its hash
+          inventory, hash reports and evidence registry from rv-hashinv itself; then every item is
+          analysed and verified against that registry. Needs --case-dir; not with --evidence.
+          rv-hashinv is searched in: --hashinv-exe, RV_HASHINV, next to rv-pdfauth, the RV HashInv
+          install folder, PATH. Its path, version and SHA-256 go into this run's audit log.
+          Default: none. Example: --case-dir E:\CASE-014 --case CASE-014 -i D:\evidence -r --intake
+          hashinv
+
+      --hashinv-exe <EXE>
+          rv-hashinv executable for --intake hashinv (needs version 0.3.0 or later).
+          Default: searched (see --intake). Example: --hashinv-exe "C:\Tools\RV
+          HashInv\rv-hashinv.exe"
+
   -h, --help
           Print help (see a summary with '-h')
 

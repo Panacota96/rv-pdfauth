@@ -69,6 +69,49 @@ mismatch, amber not in the registry).
 | `--evidence E0001,E0007` | Analyse these registered items (needs `--case-dir`; unknown id → exit 2). |
 | no `--input` | Every registered item is analysed. |
 
+## One-step intake with rv-hashinv
+
+`--intake hashinv` (GUI: **Register the evidence with RV HashInv first**, shown once a case folder is set) runs
+the intake tool for you, then the analysis, in one action. rv-pdfauth does **not** hash or register evidence on
+rv-hashinv's behalf: the hash inventory, hash reports and registry are written by rv-hashinv's own executable, with
+its own tests and audit log. rv-pdfauth only starts it, watches it and records what ran.
+
+```mermaid
+sequenceDiagram
+    participant U as Examiner
+    participant P as rv-pdfauth
+    participant H as rv-hashinv.exe
+    participant C as Case folder
+    U->>P: analyze -i D:\evidence --case-dir CASE --intake hashinv
+    P->>P: find rv-hashinv, run --version (≥ 0.3.0), SHA-256 of the .exe
+    P->>H: scan -i D:\evidence --case-dir CASE --progress jsonl …
+    H->>C: hash every file, register E0001…, runs/rv-hashinv/RUN-ID/ (hash reports)
+    H-->>P: progress lines, run id, exit code
+    alt exit code 0 or 3
+        P->>C: audit.jsonl starts with intake_delegated (path, version, SHA-256, arguments, run id, exit code)
+        P->>C: re-hash each PDF, compare with the registry, analyse
+    else any other exit code, or cancelled
+        P-->>U: error; nothing is analysed
+    end
+```
+
+```bash
+rv-pdfauth analyze -i D:\evidence -r --case-dir E:\CASE-014 --case CASE-014 --jurisdiction fr --intake hashinv
+```
+
+| Rule | Why |
+| --- | --- |
+| rv-hashinv is searched in this order: `--hashinv-exe`, the `RV_HASHINV` environment variable, the folder of `rv-pdfauth.exe`, the RV HashInv install folder (`%LOCALAPPDATA%\Programs\Rakvor\RV HashInv`), `PATH`. An explicit `--hashinv-exe` is never replaced by another copy. | The examiner knows which copy runs; the audit log says how it was found (`found_by`). |
+| Its `--version` must print `rv-hashinv X.Y.Z` with X.Y.Z ≥ 0.3.0; its SHA-256 is recorded. | 0.3.0 is the first version with the case folder; the hash lets a reviewer match the executable with a signed release's `SHA256SUMS`. |
+| The same inputs, recursion, hash algorithms, languages, examiner, case id, timestamp setting and certificate are passed on. The certificate password goes in an environment variable of the child process only and never appears in a log. | Both reports describe the same evidence with the same settings. |
+| `--case` and `--jurisdiction` are passed only while the case is being created; afterwards `case.json` decides. | Same rule as both tools' own `--case-dir`. |
+| Exit codes 0 and 3 (finished, anomalies to look at) continue; any other code, a crash or cancelling stops the run before any analysis. | The registry must be complete before items are verified against it. |
+| Not with `--evidence` (the items are new), and `--input` or `--input-list` is required. | — |
+
+The case then holds two runs, `runs/rv-hashinv/<RUN-ID>/` (hash inventory) and `runs/rv-pdfauth/<RUN-ID>/` (PDF
+analysis); `verify-case` in either tool checks both. In the GUI, **Open hash report** opens rv-hashinv's statistics
+report.
+
 ## What rv-pdfauth does with each item
 
 ```mermaid

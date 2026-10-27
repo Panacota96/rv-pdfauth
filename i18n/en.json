@@ -538,6 +538,11 @@
     "case_dir": "Case folder",
     "case_dir_hint": "optional: shared case folder (links the tools of one case)",
     "out_from_case": "Output folder: set by the case folder",
-    "evidence_ids": "Evidence IDs"
+    "evidence_ids": "Evidence IDs",
+    "intake_hashinv": "Register the evidence with RV HashInv first",
+    "intake_hint": "(hash inventory and evidence registry by the intake tool)",
+    "intake_not_found": "rv-hashinv not found (hover for details)",
+    "intake_progress": "Intake (RV HashInv)",
+    "open_hash_report": "Open hash report"
   }
 }

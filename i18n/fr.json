@@ -538,6 +538,11 @@
     "case_dir": "Dossier de l'affaire",
     "case_dir_hint": "facultatif : dossier partagé de l'affaire (relie les outils d'une même affaire)",
     "out_from_case": "Dossier de sortie : fixé par le dossier de l'affaire",
-    "evidence_ids": "ID des éléments"
+    "evidence_ids": "ID des éléments",
+    "intake_hashinv": "Enregistrer d'abord les éléments de preuve avec RV HashInv",
+    "intake_hint": "(inventaire des empreintes et registre des preuves par l'outil d'entrée)",
+    "intake_not_found": "rv-hashinv introuvable (survoler pour les détails)",
+    "intake_progress": "Entrée (RV HashInv)",
+    "open_hash_report": "Ouvrir le rapport d'empreintes"
   }
 }

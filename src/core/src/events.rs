@@ -51,6 +51,27 @@ pub enum Event {
         elapsed_ms: u64,
         eta_ms: Option<u64>,
     },
+    /// `--intake hashinv`: rv-hashinv (the intake tool) is about to register the evidence.
+    IntakeStarted {
+        tool: String,
+        version: String,
+        path: String,
+        sha256: String,
+    },
+    /// Progress of the rv-hashinv intake (items hashed so far).
+    IntakeProgress {
+        done: u64,
+        total: u64,
+        elapsed_ms: u64,
+    },
+    /// rv-hashinv finished: its run id, exit code and where its hash reports are.
+    IntakeFinished {
+        run_id: String,
+        exit_code: i32,
+        items: u64,
+        errors: u64,
+        report_dir: Option<String>,
+    },
     ReportWritten {
         kind: String,
         path: String,

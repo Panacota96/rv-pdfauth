@@ -17,6 +17,7 @@ pub mod fingerprints;
 pub mod hash;
 pub mod i18n;
 pub mod input;
+pub mod intake;
 pub mod pdfscan;
 pub mod report;
 pub mod run;

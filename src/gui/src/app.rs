@@ -374,6 +374,40 @@ impl HashInvApp {
                     }
                 }
             });
+            if self.state.out_locked() {
+                ui.horizontal_wrapped(|ui| {
+                    let mut on = self.state.intake_hashinv;
+                    if ui
+                        .checkbox(&mut on, self.state.tr("intake_hashinv"))
+                        .changed()
+                    {
+                        self.state.set_intake_hashinv(on);
+                    }
+                    match &self.state.hashinv {
+                        Some(Ok(t)) if self.state.intake_hashinv => {
+                            ui.colored_label(
+                                egui::Color32::from_rgb(0x4C, 0xD9, 0x7B),
+                                format!("rv-hashinv {}", t.version),
+                            )
+                            .on_hover_text(format!(
+                                "{}\nSHA-256 {}",
+                                t.path.display(),
+                                t.sha256
+                            ));
+                        }
+                        Some(Err(e)) if self.state.intake_hashinv => {
+                            ui.colored_label(
+                                egui::Color32::from_rgb(0xFF, 0x6B, 0x6B),
+                                self.state.tr("intake_not_found"),
+                            )
+                            .on_hover_text(e.as_str());
+                        }
+                        _ => {
+                            ui.weak(self.state.tr("intake_hint"));
+                        }
+                    }
+                });
+            }
         });
     }
 
@@ -1251,6 +1285,13 @@ impl HashInvApp {
         );
         let live = self.started.map(|s| s.elapsed().as_millis() as u64);
         ui.label(self.state.timing_text(live));
+        if let Some((done, total)) = self.state.intake_progress {
+            ui.weak(format!(
+                "{}: {done}/{total} {}",
+                self.state.tr("intake_progress"),
+                self.state.tr("files")
+            ));
+        }
         if !self.state.current_item.is_empty() {
             ui.weak(format!(
                 "{}: {}",
@@ -1311,6 +1352,22 @@ impl HashInvApp {
                         }
                         if ui.button(self.state.tr("open_logs")).clicked() {
                             open_path(&o.log_dir);
+                        }
+                        if let Some(dir) = self.state.intake_report_dir.clone()
+                            && ui.button(self.state.tr("open_hash_report")).clicked()
+                        {
+                            let lang = if self.state.lang == "all" {
+                                "en"
+                            } else {
+                                self.state.lang.as_str()
+                            };
+                            let stats =
+                                std::path::Path::new(&dir).join(format!("statistics.{lang}.html"));
+                            open_path(&if stats.is_file() {
+                                stats
+                            } else {
+                                std::path::PathBuf::from(dir)
+                            });
                         }
                     });
                     self.results_table(ui);

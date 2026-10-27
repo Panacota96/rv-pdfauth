@@ -538,6 +538,11 @@
     "case_dir": "Carpeta del caso",
     "case_dir_hint": "opcional: carpeta compartida del caso (enlaza las herramientas de un caso)",
     "out_from_case": "Carpeta de salida: definida por la carpeta del caso",
-    "evidence_ids": "ID de evidencia"
+    "evidence_ids": "ID de evidencia",
+    "intake_hashinv": "Registrar primero la evidencia con RV HashInv",
+    "intake_hint": "(inventario de hashes y registro de evidencias por la herramienta de ingreso)",
+    "intake_not_found": "rv-hashinv no encontrado (pase el ratón para ver detalles)",
+    "intake_progress": "Ingreso (RV HashInv)",
+    "open_hash_report": "Abrir informe de hashes"
   }
 }

@@ -53,6 +53,10 @@ pub struct RunConfig {
     pub evidence_ids: Vec<String>,
     /// Intake (registers evidence) or analysis (verifies against the registry). Default: [`crate::CASE_ROLE`].
     pub case_role: CaseRole,
+    /// Run the intake tool (rv-hashinv) on the same evidence first (`--intake hashinv`; needs `case_dir`).
+    pub intake_hashinv: bool,
+    /// rv-hashinv executable to use (`--hashinv-exe`); None = search (see [`crate::intake::candidates`]).
+    pub hashinv_exe: Option<PathBuf>,
 }
 
 impl Default for RunConfig {
@@ -79,6 +83,8 @@ impl Default for RunConfig {
             case_dir: None,
             evidence_ids: vec![],
             case_role: crate::CASE_ROLE,
+            intake_hashinv: false,
+            hashinv_exe: None,
         }
     }
 }
@@ -285,6 +291,13 @@ pub fn run(
         let report_dir = cfg.out_dir.join("reports").join(&run_id);
         return pipeline(cfg, sink, cancel, &run_id, &log_dir, &report_dir, None);
     };
+    let delegated;
+    let cfg = if cfg.intake_hashinv {
+        delegated = delegate_intake(cfg, case_dir, sink, cancel)?;
+        &delegated
+    } else {
+        cfg
+    };
     let (cfg, mut link) = open_case(cfg, case_dir, &run_id)?;
     let log_dir = link.run_dir.join("logs");
     let report_dir = link.run_dir.join("reports");
@@ -299,6 +312,38 @@ pub fn run(
     );
     finish_case(&link, &cfg, &log_dir, &result, sink);
     result
+}
+
+/// `--intake hashinv`: rv-hashinv registers the evidence, then this run analyses it. The delegation (which
+/// executable, its SHA-256, the arguments, its run id and exit code) opens this run's audit log.
+fn delegate_intake(
+    cfg: &RunConfig,
+    case_dir: &Path,
+    sink: &mut dyn FnMut(&Event),
+    cancel: &AtomicBool,
+) -> Result<RunConfig, String> {
+    if cfg.inputs.is_empty() && cfg.input_list.is_none() {
+        return Err(
+            "--intake hashinv needs the evidence to register (--input or --input-list)".into(),
+        );
+    }
+    if !cfg.evidence_ids.is_empty() {
+        return Err(
+            "--intake hashinv registers new evidence: it cannot be combined with --evidence".into(),
+        );
+    }
+    let tool = crate::intake::locate(cfg.hashinv_exe.as_deref())?;
+    let (args, outcome) = crate::intake::run_intake(&tool, cfg, case_dir, sink, cancel)?;
+    let mut next = cfg.clone();
+    // The case now exists with its id and jurisdiction; let case.json decide from here on.
+    next.preamble.insert(
+        0,
+        (
+            "intake_delegated".into(),
+            crate::intake::audit_details(&tool, &args, &outcome),
+        ),
+    );
+    Ok(next)
 }
 
 fn pipeline(

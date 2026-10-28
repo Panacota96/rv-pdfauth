@@ -14,8 +14,19 @@ fn bin() -> Command {
     c
 }
 
+/// The fake TSA process, killed when dropped, so a failing assertion cannot leave it running. An orphaned
+/// server keeps the test's inherited stderr open: under `cargo test | tee` (CI) the step then never ends.
+struct TsaServer(std::process::Child);
+
+impl Drop for TsaServer {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
 /// Starts tests/fake_tsa.py (needs Python with pyhanko). Returns None to skip when unavailable.
-fn test_pki(dir: &Path) -> Option<(std::process::Child, String)> {
+fn test_pki(dir: &Path) -> Option<(TsaServer, String)> {
     let py = std::env::var("RV_TEST_PYTHON").unwrap_or_else(|_| "python3".into());
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fake_tsa.py");
     let ok = std::process::Command::new(&py)
@@ -30,19 +41,21 @@ fn test_pki(dir: &Path) -> Option<(std::process::Child, String)> {
         );
         return None;
     }
-    let mut child = std::process::Command::new(&py)
-        .arg(&script)
-        .arg("serve")
-        .arg(dir)
-        .stdout(std::process::Stdio::piped())
-        .spawn()
-        .ok()?;
+    let mut server = TsaServer(
+        std::process::Command::new(&py)
+            .arg(&script)
+            .arg("serve")
+            .arg(dir)
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .ok()?,
+    );
     let mut line = String::new();
     use std::io::BufRead;
-    std::io::BufReader::new(child.stdout.take()?)
+    std::io::BufReader::new(server.0.stdout.take()?)
         .read_line(&mut line)
         .ok()?;
-    Some((child, line.trim().to_string()))
+    Some((server, line.trim().to_string()))
 }
 
 fn sample() -> PathBuf {
@@ -365,7 +378,7 @@ fn usage_doc_matches_help() {
 #[test]
 fn trust_timestamp_signature_and_custody_with_test_pki() {
     let pki = tempfile::tempdir().unwrap();
-    let Some((mut tsa, url)) = test_pki(pki.path()) else {
+    let Some((tsa, url)) = test_pki(pki.path()) else {
         return;
     };
     let out = tempfile::tempdir().unwrap();
@@ -507,7 +520,7 @@ fn trust_timestamp_signature_and_custody_with_test_pki() {
         .assert()
         .code(0)
         .stdout(predicate::str::contains("covers entry"));
-    let _ = tsa.kill();
+    drop(tsa);
 }
 
 fn case_analyze(case: &Path) -> Command {

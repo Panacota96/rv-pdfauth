@@ -169,7 +169,7 @@ file. It relies on two entry points of RV PDFAuth:
 | `accepts` | `extensions` (lower case, no dot) and content `signatures` (`format` + `match`: hex bytes at an offset); `"*"` = any file |
 | `case_formats`, `log_formats` | `rakvor.case/1`; `rakvor.audit/1` = `logs/audit.jsonl`, `rakvor.review/1` = `logs/review.jsonl` |
 | `cli_exe`, `gui_exe` | `rv-pdfauth.exe`, `rv-pdfauth-gui.exe` |
-| `exit_codes` | The meaning of 0, 1, 2, 3 and 130 (table in section 9) |
+| `exit_codes` | The meaning of 0, 1, 2, 3 and 130 (the exit-code table under Troubleshooting) |
 
 ```powershell
 rv-pdfauth describe --json

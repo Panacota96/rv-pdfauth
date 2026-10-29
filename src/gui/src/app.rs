@@ -149,6 +149,22 @@ impl HashInvApp {
         app
     }
 
+    /// Starts from the executable's arguments: input paths plus `--case-dir DIR` (RV Hub).
+    pub fn from_launch(args: crate::launch::LaunchArgs) -> Self {
+        let mut app = Self::with_inputs(args.inputs);
+        if let Some(dir) = args.case_dir {
+            app.state.set_case_dir_from_launcher(&dir);
+            app.case_entry = dir.display().to_string();
+        }
+        for n in &args.notes {
+            app.state.note_launch_problem(n);
+        }
+        if !args.notes.is_empty() {
+            app.notice = Some(args.notes.join("\n"));
+        }
+        app
+    }
+
     fn start(&mut self, ctx: &egui::Context) {
         let cfg: RunConfig = match self.state.to_config() {
             Ok(c) => c,
@@ -1437,5 +1453,67 @@ impl eframe::App for HashInvApp {
                 self.run_section(ui);
             });
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::launch::parse_launch_args;
+
+    fn launch(args: &[&str]) -> HashInvApp {
+        HashInvApp::from_launch(parse_launch_args(args.iter().map(std::ffi::OsString::from)))
+    }
+
+    fn actions(app: &HashInvApp) -> Vec<&str> {
+        app.state
+            .ui_actions
+            .iter()
+            .map(|(a, _)| a.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn launcher_case_dir_is_preset_and_audited() {
+        let app = launch(&["--case-dir", "X", "a.pdf"]);
+        assert_eq!(app.state.case_dir, "X");
+        assert_eq!(app.case_entry, "X");
+        assert!(app.state.out_locked());
+        assert_eq!(app.state.inputs, vec![PathBuf::from("a.pdf")]);
+        assert_eq!(
+            actions(&app),
+            [
+                "ui_input_added",
+                "ui_case_dir_from_launcher",
+                "ui_case_dir_changed"
+            ]
+        );
+        let d = &app.state.ui_actions[1].1;
+        assert_eq!(d["path"], "X");
+        assert!(d["at_utc"].as_str().is_some_and(|t| t.ends_with('Z')));
+        assert!(app.notice.is_none());
+    }
+
+    #[test]
+    fn launch_without_case_dir_keeps_the_old_behaviour() {
+        let app = launch(&["a.pdf"]);
+        assert!(app.state.case_dir.is_empty() && app.case_entry.is_empty());
+        assert_eq!(actions(&app), ["ui_input_added"]);
+    }
+
+    #[test]
+    fn case_dir_without_a_value_is_noted_and_ignored() {
+        let app = launch(&["a.pdf", "--case-dir"]);
+        assert!(app.state.case_dir.is_empty());
+        assert_eq!(app.state.inputs, vec![PathBuf::from("a.pdf")]);
+        assert_eq!(
+            actions(&app),
+            ["ui_input_added", "ui_launch_argument_ignored"]
+        );
+        assert!(
+            app.notice
+                .as_deref()
+                .is_some_and(|n| n.contains("--case-dir"))
+        );
     }
 }

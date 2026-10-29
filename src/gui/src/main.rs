@@ -29,10 +29,11 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "RV PDFAuth",
         options,
-        // Files or folders dropped on the .exe icon (or passed on the command line) are pre-loaded.
+        // Files or folders dropped on the .exe icon (or passed on the command line) are pre-loaded;
+        // `--case-dir DIR` (RV Hub) presets the case folder.
         Box::new(|_cc| {
-            Ok(Box::new(rv_pdfauth_gui::app::HashInvApp::with_inputs(
-                std::env::args_os().skip(1).map(std::path::PathBuf::from),
+            Ok(Box::new(rv_pdfauth_gui::app::HashInvApp::from_launch(
+                rv_pdfauth_gui::launch::parse_launch_args(std::env::args_os().skip(1)),
             )))
         }),
     )

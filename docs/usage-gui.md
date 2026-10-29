@@ -86,6 +86,12 @@ them on screen). Writing a separate "viewer note" next to the sealed log would p
 the log folder that a reader could mistake for part of the record, so the viewer deliberately writes nothing. What
 the examiner saw is fully reproducible from the run's outputs; conclusions belong in the examiner's own report.
 
+## Opening from RV Hub
+
+RV Hub opens the app with the case folder already filled: `rv-pdfauth-gui.exe --case-dir <CASE> [FILES...]` (or
+`--case-dir=<CASE>`). The audit log then starts with `ui_case_dir_from_launcher` (the path and `at_utc`); a
+`--case-dir` without a folder is ignored, shown in the window and logged as `ui_launch_argument_ignored`.
+
 ## What the GUI records
 
 Your choices are part of the evidence record. Before the run starts, the GUI writes them to the audit log, each
@@ -98,6 +104,7 @@ with the time it happened (`at_utc`):
 | Change language / subfolders | `ui_language_changed`, `ui_recursive_changed` |
 | Interface language, custody form, timestamp, certificate | `ui_interface_language_changed`, `ui_jurisdiction_changed`, `ui_timestamp_changed`, `ui_signing_certificate_changed` |
 | Options | `ui_extract_revisions_changed`, `ui_visual_diff_changed`, `ui_dpi_changed`, `ui_max_pages_changed`, `ui_objects_dump_changed`, `ui_extract_embedded_changed`, `ui_worker_timeout_changed`, `ui_worker_memory_changed`, `ui_fingerprints_db_changed`, `ui_item_reports_changed` |
+| Opened by RV Hub with `--case-dir` | `ui_case_dir_from_launcher`, `ui_case_dir_changed` (or `ui_launch_argument_ignored`) |
 | Press Start | `ui_start_clicked` (final settings, including all options) |
 | Press Cancel | `item_cancelled`, `run_cancelled` |
 

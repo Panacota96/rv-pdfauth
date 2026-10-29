@@ -145,6 +145,36 @@ certificate and custody form in *5. Trust*; then **Start review**. Every setting
 written to the run's audit log (`ui_*` actions). The engine, outputs and findings are the same as the CLI's.
 Details: [usage-gui.md](usage-gui.md).
 
+### Starting from RV Hub: `--case-dir` and `describe --json`
+
+RV Hub (the Rakvor launcher) finds the installed tools, opens them on a case folder and suggests which one fits a
+file. It relies on two entry points of RV PDFAuth:
+
+- **`rv-pdfauth-gui.exe --case-dir <CASE> [FILES...]`** starts the desktop app with **Case folder** already filled
+  (`--case-dir=<CASE>` also works). Other arguments are pre-loaded as evidence, as when files are dropped on the
+  icon. The preset is written to the run's audit log as `ui_case_dir_from_launcher` (path and `at_utc`) followed by
+  `ui_case_dir_changed`. `--case-dir` without a folder is ignored: the window says so and the audit log records
+  `ui_launch_argument_ignored`.
+- **`rv-pdfauth describe --json`** prints one JSON object (sorted keys) that RV Hub reads; it is hidden from
+  `rv-pdfauth --help` but listed in [usage-cli.md](usage-cli.md). It reads and writes nothing. Schema:
+  [`schemas/describe.schema.json`](../schemas/describe.schema.json) (`rakvor.describe/1`, identical in every Rakvor
+  tool).
+
+| Field | Meaning |
+| --- | --- |
+| `schema` | `rakvor.describe/1` |
+| `tool`, `title`, `version` | `rv-pdfauth`, `RV PDFAuth`, the product version (`version.txt`) |
+| `role` | `analysis` (examines evidence registered in the case folder) |
+| `main_verb` | `analyze`: the command that does the main work |
+| `accepts` | `extensions` (lower case, no dot) and content `signatures` (`format` + `match`: hex bytes at an offset); `"*"` = any file |
+| `case_formats`, `log_formats` | `rakvor.case/1`; `rakvor.audit/1` = `logs/audit.jsonl`, `rakvor.review/1` = `logs/review.jsonl` |
+| `cli_exe`, `gui_exe` | `rv-pdfauth.exe`, `rv-pdfauth-gui.exe` |
+| `exit_codes` | The meaning of 0, 1, 2, 3 and 130 (table in section 9) |
+
+```powershell
+rv-pdfauth describe --json
+```
+
 ## 3. Reading the outputs
 
 ```mermaid
@@ -414,6 +444,7 @@ The visual diff is *not applicable* (no finding) for single-revision files or wi
 | `timestamp` | obtained and logged | TSA unreachable (nothing changed) | — | broken log (nothing added) | — |
 | `self-test` | all pass | a failure: do not use the build | — | — | — |
 | `fingerprints learn / list / export` | done | file not a PDF / no producer / DB unreadable / output exists | usage error | — | — |
+| `describe` | description printed | — | usage error (unknown option) | — | — |
 
 ### Other messages
 

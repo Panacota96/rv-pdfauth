@@ -284,7 +284,31 @@ EXIT CODES:
     /// Print the full help of every command as Markdown (used to generate docs/usage-cli.md).
     #[command(hide = true)]
     DocsCli,
+    /// Describe this tool as JSON (schema rakvor.describe/1) for RV Hub and scripts.
+    #[command(hide = true, after_long_help = DESCRIBE_AFTER_HELP)]
+    Describe {
+        /// Print JSON: one pretty-printed object with sorted keys.
+        /// Default: on (JSON is the only format)
+        /// Example: --json
+        #[arg(long, verbatim_doc_comment)]
+        json: bool,
+    },
 }
+
+const DESCRIBE_AFTER_HELP: &str = "\
+DESCRIPTION:
+  Prints what this tool is, what it accepts and how to launch it, validated by
+  schemas/describe.schema.json. RV Hub reads it to list the tool, start its GUI on a case
+  folder (rv-pdfauth-gui.exe --case-dir <CASE> [FILES...]) and suggest the tool for a file.
+  Fields: schema, tool, title, version, role (analysis), main_verb (analyze), accepts
+  (extensions and signatures; \"*\" = any file), case_formats, log_formats, cli_exe,
+  gui_exe, exit_codes. Nothing is read or written; no audit log is created.
+
+EXAMPLES:
+  rv-pdfauth describe --json
+
+EXIT CODES:
+  0  The description was printed.";
 
 #[derive(Clone, Copy, ValueEnum)]
 enum ProgressMode {
@@ -730,6 +754,13 @@ fn main() -> ExitCode {
             print!("{}", docs_cli());
             EXIT_OK
         }
+        Command::Describe { json: _ } => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&describe()).expect("describe is valid JSON")
+            );
+            EXIT_OK
+        }
     })
 }
 
@@ -1171,6 +1202,32 @@ fn self_test() -> u8 {
     }
 }
 
+/// The tool's self-description (`describe --json`, schema rakvor.describe/1; see schemas/describe.schema.json).
+/// serde_json sorts the keys (no preserve_order feature), so the output is stable.
+fn describe() -> serde_json::Value {
+    serde_json::json!({
+        "schema": "rakvor.describe/1",
+        "tool": TOOL_NAME,
+        "title": "RV PDFAuth",
+        "version": TOOL_VERSION,
+        "role": CASE_ROLE.name(),
+        "main_verb": "analyze",
+        // pdfscan::is_pdf_candidate: `%PDF-` at offset 0, or a .pdf name.
+        "accepts": {"extensions": ["pdf"], "signatures": [{"format": "pdf", "match": [{"offset": 0, "hex": "255044462d"}]}]},
+        "case_formats": [case::SCHEMA_CASE],
+        "log_formats": ["rakvor.audit/1"],
+        "cli_exe": format!("{}.exe", TOOL_NAME),
+        "gui_exe": format!("{}-gui.exe", TOOL_NAME),
+        "exit_codes": {
+            "0": "Completed; no high-severity finding.",
+            "1": "Runtime error (input not found, output not writable, case log locked, ...).",
+            "2": "Usage error (unknown option, bad value, case folder of another case or schema).",
+            "3": "Completed with at least one high-severity finding (e.g. a signed revision changed afterwards), or the case folder fails verification.",
+            "130": "Cancelled with Ctrl+C; partial reports and the cancellation are in the audit log."
+        }
+    })
+}
+
 /// Markdown of every command's long help, so docs/usage-cli.md can never drift from the binary.
 fn docs_cli() -> String {
     let mut root = Cli::command().term_width(100);
@@ -1185,7 +1242,8 @@ fn docs_cli() -> String {
     ));
     let names: Vec<String> = root
         .get_subcommands()
-        .filter(|c| !c.is_hide_set() && c.get_name() != "help")
+        // `describe` is hidden from the command list but documented (RV Hub reads it).
+        .filter(|c| (!c.is_hide_set() || c.get_name() == "describe") && c.get_name() != "help")
         .map(|c| c.get_name().to_string())
         .collect();
     for name in names {

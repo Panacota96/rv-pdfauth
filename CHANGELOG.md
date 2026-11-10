@@ -5,6 +5,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Entries are generated from
 [Conventional Commits](https://www.conventionalcommits.org/) by release-please and reviewed by a human.
 
+## [0.4.0](https://github.com/Panacota96/rv-pdfauth/compare/v0.3.0...v0.4.0) (2026-11-10)
+
+
+### Features
+
+* **cli:** describe --json prints the tool's self-description for RV Hub ([77a052a](https://github.com/Panacota96/rv-pdfauth/commit/77a052aa17ba69300ed280a322b34fcd86ea5f78))
+* **gui:** --case-dir DIR presets the case folder when RV Hub launches the app ([a78bc40](https://github.com/Panacota96/rv-pdfauth/commit/a78bc405bf8b3fa8e3bd26aec107b088f96366e8))
+
+
+### Bug Fixes
+
+* **trust:** drive timestamp checks from the audit log; RFC 3161/5280 TSA path rules ([c0c9f6a](https://github.com/Panacota96/rv-pdfauth/commit/c0c9f6ad328d234147175b7cd6106636d195b590))
+* **trust:** drive timestamp checks from the audit log; RFC 3161/5280 TSA path rules ([8047176](https://github.com/Panacota96/rv-pdfauth/commit/804717688fea23b776fb038aec42328b2c16ac53))
+
 ## [0.3.0](https://github.com/Panacota96/rv-pdfauth/compare/v0.2.1...v0.3.0) (2026-10-27)
 
 

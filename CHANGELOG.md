@@ -5,6 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Entries are generated from
 [Conventional Commits](https://www.conventionalcommits.org/) by release-please and reviewed by a human.
 
+## [0.4.1](https://github.com/Panacota96/rv-pdfauth/compare/v0.4.0...v0.4.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* **security:** patch dependency advisories, blind RSA signing, check advisories in CI ([53113bb](https://github.com/Panacota96/rv-pdfauth/commit/53113bbabb74a8b579e71d08178ad947f3a407cc))
+* **security:** patch dependency advisories, blind RSA signing, check advisories in CI ([65b15e4](https://github.com/Panacota96/rv-pdfauth/commit/65b15e43177c4b71efd289566db38a1ede6c7b64))
+
 ## [0.4.0](https://github.com/Panacota96/rv-pdfauth/compare/v0.3.0...v0.4.0) (2026-11-10)
 
 

@@ -4,6 +4,7 @@ description = "RV PDFAuth PDF layer: raw tokenizer, revisions, xref, metadata, f
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 

@@ -4,6 +4,7 @@ description = "RV PDFAuth core: evidence intake, dual hashing, audit chain, anal
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 build = "build.rs"

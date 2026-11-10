@@ -4,6 +4,7 @@ description = "RV PDFAuth renderer: PDFium page rendering (loaded at run time) a
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 

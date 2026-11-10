@@ -70,11 +70,13 @@ fn path_removal_keeps_the_other_entries() {
 /// The installer identity of every Rakvor tool. Two installers with the same AppId upgrade or uninstall each
 /// other (rv-imgauth 0.2.0 shipped with rv-pdfauth's). A new tool adds its AppId here, in every tool repo.
 const THIS_TOOL: &str = "rv-pdfauth";
-const RAKVOR_APP_IDS: [(&str, &str); 4] = [
+const RAKVOR_APP_IDS: [(&str, &str); 6] = [
     ("rv-hashinv", "6D3F3B0E-5B7A-4B2C-9E61-2A1C7D4E9F10"),
     ("rv-pdfauth", "B2454915-B966-44CD-9C5B-5413F38185AE"),
     ("rv-rsmf", "7E0DA535-8638-4E9D-8680-ED046DCA9F45"),
     ("rv-imgauth", "04A0C3C3-4929-42ED-81F7-93DB361940C8"),
+    ("rv-hub", "703D49A5-7B83-4C62-A97F-ED13C341CC23"),
+    ("rv-certcheck", "32343DE5-B0E4-4454-8A42-A5CF82EEC9BF"),
 ];
 
 #[test]

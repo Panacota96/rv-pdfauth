@@ -32,6 +32,10 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
+      - name: Dependency advisories, licences and sources (cargo-deny; no GPL/AGPL/LGPL; see deny.toml)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories licenses bans sources
       - name: clippy (findings also surfaced as annotations)
         run: |
           set -o pipefail

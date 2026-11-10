@@ -539,11 +539,16 @@ EXAMPLES:
   rv-pdfauth verify-log rakvor-out/logs/20261019T101500Z-a1b2c3 --tsa-ca digicert-tsa-roots.pem
 
 TIMESTAMP CHECKS:
-  For each timestamp-<N>.tsr: the token covers the chain head of entry N; the TSA's CMS signature is
-  valid (signer certificate in the token, ESS signing-certificate binding, message digest over the
-  TSTInfo, RSA signature, timeStamping key usage). Without --tsa-ca the output says "chain not
-  validated"; with it the TSA certificate must chain to a certificate of the bundle (signatures,
-  validity at the token's time, CA flag). Revocation is not checked.
+  Driven by the log: every token a timestamp_obtained entry records must still be next to it
+  with its metadata (timestamp-<N>.tsr with the recorded SHA-256, timestamp-<N>.json agreeing);
+  a missing file is a problem, never a skipped check; a token file no entry records is checked
+  too. For each token: it covers the chain head of entry N; the TSA's CMS signature is valid
+  (signer certificate in the token, ESS signing-certificate binding, message digest over the
+  TSTInfo, RSA signature, an extended key usage that is critical and only timeStamping). Without
+  --tsa-ca the output says "chain not checked"; with it the TSA certificate must reach a
+  certificate of the bundle at the token's time (every candidate issuer tried; CA flag,
+  keyCertSign, pathLenConstraint, directoryName name constraints, no unsupported critical
+  extension). Revocation is never checked: establish it from CRL/OCSP evidence covering genTime.
 
 EXIT CODES:
   0  The chain is intact and every timestamp token verifies.

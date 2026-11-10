@@ -869,17 +869,30 @@ sequenceDiagram
   a readable `timestamp-<NNNNN>.json`.
 - Offline → `timestamp_pending` and the run completes; `rv-pdfauth timestamp <log>` later re-verifies the chain and
   appends `timestamp_obtained` for the then-current head (earlier entries are never rewritten).
-- `verify-log` re-checks: the token file's SHA-256, the TSA status, that the token's imprint equals the
+- `verify-log` and `verify-case` re-check every token the audit log records (`timestamp_obtained`; a recorded
+  token whose `.tsr` or `.json` is missing, or whose metadata disagrees with the entry, is a problem — deleting the
+  metadata file does not skip the checks) and any token file no entry records: the token file's SHA-256, the TSA status, that the token's imprint equals the
   `entry_hash` of `covers_seq`, and the **TSA's CMS signature** (RFC 3161 / RFC 5652, in
   [trust.rs](../src/core/src/trust.rs) with the RustCrypto crates): eContentType `id-ct-TSTInfo`; exactly one
   SignerInfo whose certificate is in the token (`certReq` is always set); signed attributes `content-type`,
   `message-digest` = hash of the TSTInfo, ESS `signing-certificate` (v1, SHA-1) or `signing-certificate-v2`
   (default SHA-256) equal to the hash of that certificate; the RSA PKCS#1 v1.5 signature (SHA-256/384/512; other
-  algorithms are reported as not supported and fail the check); and the `id-kp-timeStamping` extended key usage.
-  With `--tsa-ca <bundle>` the certificate chain is also validated up to a certificate of the bundle at `genTime`
-  (each signature, validity period, CA flag of issuers); without it the output says *chain not validated*.
-  Revocation (CRL/OCSP), the policy OID and the accuracy are **not** checked: for those, and as an independent
-  second tool, use OpenSSL (see [usage.md](usage.md#6-timestamps)) before relying on the time in court (G18).
+  algorithms are reported as not supported and fail the check); and an extended key usage that is critical and
+  contains only `id-kp-timeStamping` (RFC 3161 §2.3, as rv-certcheck and OpenSSL's `timestampsign` purpose).
+  With `--tsa-ca <bundle>` the certificate path is also validated up to a certificate of the bundle at `genTime`:
+  every candidate issuer and anchor is tried (cross-signed intermediates, renewed anchors, self-issued key-rollover
+  intermediates; at most 8 deep, no loops), and a path is accepted only if (an RFC 5280 subset,
+  `trust::check_path`) every RSA signature verifies and every certificate is valid at `genTime`; every intermediate
+  has `cA=TRUE` (an anchor too, or is v1 / has keyCertSign); an issuer with keyUsage has `keyCertSign`; no
+  `pathLenConstraint` is exceeded (self-issued certificates not counted); directoryName name constraints hold
+  (other name forms are not evaluated: a path carrying such names under such a constraint is rejected); and no
+  certificate has an unsupported critical extension (policy processing is not implemented: critical
+  policyConstraints, policyMappings and inhibitAnyPolicy fail closed). 34 fixture chains
+  (`tests/fixtures/tsa-chains`) pin these rules, each cross-checked with `openssl verify -purpose timestampsign`.
+  Without `--tsa-ca` the output says *chain not checked*. Revocation (CRL/OCSP), the policy OID and the accuracy
+  are **never** checked: establish revocation separately from CRL/OCSP evidence covering `genTime`; the OpenSSL
+  cross-check in [usage.md](usage.md#6-timestamps) is an independent signature/chain check, not a revocation
+  check (G18).
 - The default TSA URL is plain HTTP; integrity rests on the TSA's signature, which is why the signature and chain
   checks matter. eIDAS qualified status depends on the TSA chosen (see [admissibility.md](admissibility.md)).
 

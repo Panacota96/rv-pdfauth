@@ -67,11 +67,15 @@ sequenceDiagram
 - The token is stored next to the log: `timestamp-<N>.tsr` (DER) and `timestamp-<N>.json` (readable summary).
 - Offline or air-gapped: the run still completes. When the network is back, `rv-pdfauth timestamp <log folder>`
   re-verifies the chain and appends `timestamp_obtained` — earlier entries are never rewritten.
-- `verify-log` checks each token: its file digest, the TSA status, imprint = stored head, entry `#N` still has
+- `verify-log` and `verify-case` check every token the log's `timestamp_obtained` entries record (a missing `.tsr`
+  or `.json` is a problem, never a skipped check) and any token file no entry records: its file digest, the TSA status, imprint = stored head, entry `#N` still has
   that hash, and the TSA's CMS signature (signer certificate in the token, ESS binding, message digest, RSA
-  signature, timeStamping EKU). `--tsa-ca <CA bundle>` also validates the certificate chain; otherwise the output
-  says *chain not validated*. Revocation is not checked ([usage.md](usage.md#6-timestamps)).
-- Independent check: `openssl ts -verify -digest <head> -in timestamp-<N>.tsr -CAfile <TSA chain>`.
+  signature, critical timeStamping-only EKU). `--tsa-ca <CA bundle>` also validates the certificate path; otherwise
+  the output says *chain not checked*. Revocation is never checked ([usage.md](usage.md#6-timestamps)).
+- Independent signature/chain check: `openssl ts -verify -digest <head> -in timestamp-<N>.tsr -CAfile <TSA chain>`.
+  It does not check revocation (no CRL supplied, no OCSP query): establish the TSA certificate's revocation
+  status separately from CRL/OCSP evidence covering genTime (e.g. `openssl verify -crl_check -CRLfile <crl>
+  -attime <genTime-epoch> …`, or `rv-certcheck analyze --crl/--ocsp`).
 - `--no-timestamp` (or `RV_NO_TIMESTAMP=1`) disables it; tests use a local TSA (`tests/fake_tsa.py`).
 - **Limitation:** a timestamp proves the log existed at that time, not that its content is true.
 

@@ -275,7 +275,9 @@ digest and item-report digest recorded before it ([theory.md B15](theory.md#b15-
 | Broken chain | `rv-pdfauth timestamp` refuses (exit 3): no timestamp is added to a broken log | Investigate; do not repair |
 
 `rv-pdfauth verify-log` checks the token's digest, that it covers the logged head, and the TSA's CMS signature
-(signer certificate in the token, ESS binding, message digest, RSA signature, timeStamping key usage). Give it the
+(signer certificate in the token, ESS binding, message digest, RSA signature, critical timeStamping-only key
+usage) for every token the audit log records, and any token file no entry records; a recorded token whose `.tsr`
+or `.json` is missing makes the log fail (exit 3). Give it the
 TSA's CA bundle to validate the certificate chain as well:
 
 ```powershell
@@ -283,9 +285,10 @@ rv-pdfauth verify-log <OUT>\logs\<RUN-ID> --tsa-ca C:\certs\tsa-roots.pem
 #     timestamp … covers entry #60: TSA signature valid (signer: …); chain validated to CN=… (revocation not checked)
 ```
 
-Without `--tsa-ca` the line ends with *chain not validated*; a token whose signature or chain fails gives exit 3.
-Revocation, the policy OID and the accuracy are not checked by the tool; check them, and cross-check the result
-with a second tool, with OpenSSL (Git for Windows ships `openssl.exe`):
+Without `--tsa-ca` the line ends with *chain not checked*; a token whose signature or chain fails gives exit 3.
+Revocation, the policy OID and the accuracy are never checked by the tool. Cross-check the **signature and chain**
+with OpenSSL (Git for Windows ships `openssl.exe`); it does not check revocation either (no CRL is supplied and
+OpenSSL does not query OCSP):
 
 ```bash
 cd <OUT>/logs/<RUN-ID>
@@ -295,10 +298,13 @@ openssl ts -reply -in timestamp-$N.tsr -text              # genTime, policy OID,
 openssl ts -reply -in timestamp-$N.tsr -token_out -out token.der
 openssl pkcs7 -inform DER -in token.der -print_certs > tsa-certs.pem   # certificates sent by the TSA
 openssl ts -verify -digest "$H" -in timestamp-$N.tsr -CAfile <TSA root.pem> -untrusted tsa-certs.pem
-# → "Verification: OK"
+# → "Verification: OK"  (signature and chain only, not revocation)
 ```
 
-Get the TSA root certificate from the TSA's own repository, not from the token. Record the output in the case
+Establish the TSA certificate's revocation status separately, from CRL/OCSP evidence that covers genTime (a CRL
+issued after genTime by the TSA's CA, or an OCSP response archived at stamping time), e.g.
+`openssl verify -crl_check -CRLfile tsa-ca.crl -CAfile <TSA root.pem> -untrusted tsa-certs.pem -attime <genTime-epoch> tsa.pem`,
+or `rv-certcheck analyze --crl … --ocsp …`. Get the TSA root certificate from the TSA's own repository, not from the token. Record the output in the case
 file: it is the evidence that the time is genuine.
 
 ## 7. Signing reports with the examiner certificate

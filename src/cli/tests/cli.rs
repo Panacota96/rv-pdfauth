@@ -375,6 +375,72 @@ fn usage_doc_matches_help() {
     );
 }
 
+/// Review (sidecar bypass): a copy of `logs` without its timestamp-*.json files. The audit log's
+/// timestamp_obtained entries still name the tokens, so the missing metadata is a problem and the tokens are
+/// still checked: with another CA bundle the chain is still refused.
+fn sidecar_deletion_is_detected(logs: &Path, good_ca: &Path, other_ca: &Path) {
+    let copy = tempfile::tempdir().unwrap();
+    for e in std::fs::read_dir(logs).unwrap() {
+        let p = e.unwrap().path();
+        let name = p.file_name().unwrap().to_string_lossy().into_owned();
+        if p.is_file() && !(name.starts_with("timestamp-") && name.ends_with(".json")) {
+            std::fs::copy(&p, copy.path().join(&name)).unwrap();
+        }
+    }
+    for ca in [good_ca, other_ca] {
+        bin()
+            .arg("verify-log")
+            .arg(copy.path())
+            .arg("--tsa-ca")
+            .arg(ca)
+            .assert()
+            .code(3)
+            .stdout(predicate::str::contains("metadata"));
+    }
+    bin()
+        .arg("verify-log")
+        .arg(copy.path())
+        .arg("--tsa-ca")
+        .arg(other_ca)
+        .assert()
+        .code(3)
+        .stdout(predicate::str::contains("chain not validated"));
+    bin().arg("verify-log").arg(copy.path()).assert().code(3);
+}
+
+/// The token checked from its metadata alone (log cut just before its timestamp_obtained entry, metadata digest
+/// updated to the altered token): the TSA signature check catches the alteration.
+fn altered_token_without_its_entry_fails_the_signature(
+    logs: &Path,
+    tsr: &Path,
+    meta: &serde_json::Value,
+) {
+    let cut = tempfile::tempdir().unwrap();
+    let covers = meta["covers_seq"].as_u64().unwrap();
+    let kept: String = std::fs::read_to_string(logs.join("audit.jsonl"))
+        .unwrap()
+        .lines()
+        .filter(|l| {
+            serde_json::from_str::<serde_json::Value>(l).unwrap()["seq"].as_u64() <= Some(covers)
+        })
+        .map(|l| format!("{l}\n"))
+        .collect();
+    std::fs::write(cut.path().join("audit.jsonl"), kept).unwrap();
+    std::fs::copy(tsr, cut.path().join(tsr.file_name().unwrap())).unwrap();
+    std::fs::write(
+        cut.path()
+            .join(tsr.with_extension("json").file_name().unwrap()),
+        meta.to_string(),
+    )
+    .unwrap();
+    bin()
+        .arg("verify-log")
+        .arg(cut.path())
+        .assert()
+        .code(3)
+        .stdout(predicate::str::contains("signature value does not verify"));
+}
+
 #[test]
 fn trust_timestamp_signature_and_custody_with_test_pki() {
     let pki = tempfile::tempdir().unwrap();
@@ -412,7 +478,7 @@ fn trust_timestamp_signature_and_custody_with_test_pki() {
         .code(0)
         .stdout(predicate::str::contains("covers entry"))
         .stdout(predicate::str::contains("TSA signature valid"))
-        .stdout(predicate::str::contains("chain not validated"));
+        .stdout(predicate::str::contains("chain not checked"));
     bin()
         .arg("verify-log")
         .arg(&logs)
@@ -448,6 +514,11 @@ fn trust_timestamp_signature_and_custody_with_test_pki() {
         .arg(other.path().join("missing.pem"))
         .assert()
         .code(1);
+    sidecar_deletion_is_detected(
+        &logs,
+        &pki.path().join("ca.pem"),
+        &other.path().join("ca.pem"),
+    );
     let item = only_dir(&only_dir(&out.path().join("reports")).join("items"));
     for f in [
         "custody.json",
@@ -476,7 +547,8 @@ fn trust_timestamp_signature_and_custody_with_test_pki() {
         .assert()
         .code(3)
         .stdout(predicate::str::contains("missing or altered"));
-    // Even with the recorded token digest updated to match, the signature check catches it.
+    // Updating the digest in the metadata file does not help: the audit log's timestamp_obtained entry is what
+    // the token is checked against, and the metadata now disagrees with it.
     let meta_path = tsr.with_extension("json");
     let mut meta: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&meta_path).unwrap()).unwrap();
@@ -488,7 +560,8 @@ fn trust_timestamp_signature_and_custody_with_test_pki() {
         .arg(&logs)
         .assert()
         .code(3)
-        .stdout(predicate::str::contains("signature value does not verify"));
+        .stdout(predicate::str::contains("missing or altered"));
+    altered_token_without_its_entry_fails_the_signature(&logs, &tsr, &meta);
     // Offline run: pending, then added later with `timestamp`.
     let out2 = tempfile::tempdir().unwrap();
     bin()

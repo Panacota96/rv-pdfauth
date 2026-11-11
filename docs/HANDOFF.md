@@ -1,6 +1,6 @@
 # Handover — rv-pdfauth 0.4.1
 
-State on 2026-11-11 (commit `6731c48` on `main`). **rv-pdfauth** — analysis: signals of modification in PDF documents (revisions, metadata, fonts, signatures, hidden content).
+State on 2026-11-11 (commit `aa7155c` on `main`). **rv-pdfauth** — analysis: signals of modification in PDF documents (revisions, metadata, fonts, signatures, hidden content).
 
 This page is for whoever picks the project up next: where things are, how to build, test and release it, the decisions already made and what is
 still open. The user-facing guides are [usage.md](usage.md) and [installation.md](installation.md).
@@ -43,10 +43,11 @@ tool; a new tool's AppId goes into every repository's copy.
 ## 3. Everyday commands
 
 ```bash
+scripts/fetch_pdfium.sh                              # pinned PDFium (digest-checked), first
+export RV_PDFIUM_PATH="$PWD/third_party/pdfium/linux-x64/libpdfium.so"
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
-export RV_PDFIUM_PATH=$PWD/third_party/pdfium/linux-x64/libpdfium.so   # PDFium for the tests
 cargo deny check                                    # advisories, licences, bans, sources
 python <forge>/scripts/validate_project.py . --run --tests   # the Rakvor contract (forge checkout)
 ```
@@ -79,7 +80,7 @@ variables or prompts and never logged; no GPL/AGPL/LGPL components; tools report
 
 ## 6. Open work
 
-- PDFium is a pinned binary dependency (`third_party/pdfium`, version and SHA-256 in `PDFIUM_VERSION.txt`, licences in `NOTICE`), loaded at run time; tests need `RV_PDFIUM_PATH` pointing at the Linux library.
+- PDFium is a pinned binary dependency, never committed (`scripts/fetch_pdfium.sh`; version and SHA-256 in `third_party/pdfium/PDFIUM_VERSION.txt`, licences in `NOTICE`), loaded at run time. Set `RV_PDFIUM_PATH` before `cargo test`: without it the rendering tests print `skipping PDFium test` and pass without exercising the visual diff ([development.md](development.md)).
 - The licence (`LICENSE`) and the admissibility analysis (`docs/admissibility.md`) are drafts pending a lawyer's review (Colombia and France).
 - Revocation of the TSA certificate is never checked by the tools (gap G18): it is established separately from CRL/OCSP evidence covering genTime ([ADR 0002](adr/0002-tsa-token-verification.md)).
 - RUSTSEC-2023-0071 is a documented exception until a stable `cms` 0.3 (rsa 0.10) exists ([ADR 0003](adr/0003-dependency-advisories.md)).

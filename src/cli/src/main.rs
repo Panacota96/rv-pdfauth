@@ -215,11 +215,12 @@ TIMESTAMP CHECKS:
 
 RECORDED OUTPUTS:
   Every file the log says the run wrote (item reports, statistics, analysis outputs such as
-  extracted revisions and maps, hashes.csv, environment.json) is re-hashed with each algorithm
-  recorded and compared; the latest entry for a file wins. A missing, edited or replaced file is
-  a problem; a recorded path that is absolute, contains .. or resolves outside the run folder
-  (symlink, junction) is rejected and not read. Timestamp tokens (checked above) are listed as
-  not re-hashed, with the reason. Output: \"outputs: N verified of M recorded (algorithms)\".
+  revisions, visual diffs and objects.json, hashes.csv, environment.json) is re-hashed with each
+  algorithm recorded and compared; the latest entry for a file wins. A missing, edited or
+  replaced file is a problem; a recorded path that is absolute, contains .. or resolves outside
+  the run folder (symlink, junction) is rejected and not read. Timestamp tokens (checked above)
+  are listed as not re-hashed, with the reason. Output: \"outputs: N verified of M recorded
+  (algorithms)\".
 
 EXIT CODES:
   0  The chain is intact, every timestamp token verifies, and every output file it records

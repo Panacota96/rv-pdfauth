@@ -550,11 +550,23 @@ TIMESTAMP CHECKS:
   keyCertSign, pathLenConstraint, directoryName name constraints, no unsupported critical
   extension). Revocation is never checked: establish it from CRL/OCSP evidence covering genTime.
 
+RECORDED OUTPUTS:
+  Every file the log says the run wrote (item reports, statistics, analysis outputs such as
+  revisions, visual diffs and objects.json, hashes.csv, environment.json) is re-hashed with each
+  algorithm recorded and compared; the latest entry for a file wins. A missing, edited or
+  replaced file is a problem; a recorded path that is absolute, contains .. or resolves outside
+  the run folder (symlink, junction) is rejected and not read. Timestamp tokens (checked above)
+  are listed as not re-hashed, with the reason. Output: "outputs: N verified of M recorded
+  (algorithms)".
+
 EXIT CODES:
-  0  The chain is intact and every timestamp token verifies.
+  0  The chain is intact, every timestamp token verifies, and every output file it records
+     (reports, analysis outputs, hashes.csv, environment.json) still has the recorded digests.
   1  The log or the --tsa-ca file cannot be read.
-  3  The chain is broken (an entry was edited, deleted or re-ordered), or a timestamp token does not
-     verify (altered token, invalid TSA signature, chain not trusted by --tsa-ca).
+  3  The chain is broken (an entry was edited, deleted or re-ordered), a timestamp token does not
+     verify (altered token, invalid TSA signature, chain not trusted by --tsa-ca), or a recorded
+     output file was edited, deleted or replaced after the run (named in the output; a recorded
+     path that leads outside the run folder is rejected, not read).
 ```
 
 ## rv-pdfauth self-test
@@ -635,7 +647,10 @@ CHECKS:
   - evidence/registry.json has the SHA-256 recorded at the last registry change;
   - every run announced in the case log (by any Rakvor tool) has an intact audit.jsonl (and
     valid timestamp tokens), its case_linked entry points to its run_started entry, and the
-    audit head recorded at run_finished is its final entry (only timestamp_obtained may follow).
+    audit head recorded at run_finished is its final entry (only timestamp_obtained may follow);
+  - every output file a run's audit log records (reports, analysis outputs, hashes.csv,
+    environment.json) is re-hashed and compared with the recorded digests (edited, deleted or
+    replaced: a problem).
 
 EXAMPLES:
   rv-pdfauth verify-case E:\CASE-014
@@ -643,7 +658,8 @@ EXAMPLES:
 EXIT CODES:
   0  The case folder is intact (warnings, e.g. a run still in progress, are printed).
   1  The folder is not a case folder (no case.json).
-  3  At least one check failed: the case was edited, truncated or re-ordered.
+  3  At least one check failed: the case was edited, truncated or re-ordered, or a run's
+     recorded output (report, register) was edited, deleted or replaced.
 ```
 
 ## rv-pdfauth describe

@@ -34,13 +34,47 @@ Editing a value changes that entry's hash; deleting or re-ordering breaks `seq` 
 Verify with either implementation:
 
 ```bash
-rv-pdfauth verify-log rakvor-out/logs/<RUN-ID>          # exit 0 intact, 3 broken
+rv-pdfauth verify-log rakvor-out/logs/<RUN-ID>          # exit 0 intact, 3 broken or an output changed
 python tests/verify_chain.py rakvor-out/logs/<RUN-ID>   # independent re-implementation
 ```
 
 > The chain proves the log is **internally consistent**. On its own it does not prove *when* it was written —
 > that is what the trusted timestamp below adds. Storing the final `entry_hash` (printed in the statistics report)
 > in your case management system remains good practice.
+
+### Recorded outputs: the files the log vouches for
+
+The chain proves that the *digests* recorded in the log are unchanged, not that the files they describe still
+have them. `verify-log` (and `verify-case`, for every run) therefore re-hashes every output file the log records
+and compares it with every digest recorded for it ([src/core/src/outputs.rs](../src/core/src/outputs.rs), shared
+byte-identical by every Rakvor tool):
+
+```mermaid
+flowchart LR
+    A["audit.jsonl (chain intact)"] --> R["recorded files<br/>path → digests; the latest entry wins"]
+    R --> S{"safe relative path,<br/>inside the run folder?"}
+    S -- no --> X["problem: rejected, not read"]
+    S -- yes --> E{"exists, regular file?"}
+    E -- no --> M["problem: missing / replaced"]
+    E -- yes --> H{"every recorded<br/>digest equal?"}
+    H -- no --> C["problem: changed (named, both digests)"]
+    H -- yes --> V["verified"]
+```
+
+| Entry | File (run folder) |
+| --- | --- |
+| `environment_recorded`, `hash_register_written` | `logs/environment.json`, `logs/hashes.csv` |
+| `item_reports_written` | `reports/<folder>/<file>` for every file of the item |
+| `output_written` (with `file` and `hashes`) | `reports/<file>`: every derived file (revisions, visual diffs, `objects.json`, embedded files, `warnings.json`) |
+| `statistics_report_written` | `reports/statistics.json` and every `statistics.<LANG>.html/.pdf` |
+| `timestamp_obtained` | not re-hashed here: the token is checked by the timestamp verification below |
+
+A standalone run's folders are `<OUT>/logs/<RUN-ID>` and `<OUT>/reports/<RUN-ID>` (each its own boundary); a
+case run's are `<CASE>/runs/<tool>/<RUN-ID>/logs` and `/reports` (the run folder is the boundary). A recorded path
+that is absolute, contains `..`, a drive, `\` or `:`, or resolves outside the boundary through a symlink or
+junction is rejected and never read. Output: `outputs: N verified of M recorded (algorithms)`, then any file not
+re-hashed with the reason. Files the run never recorded (added to the folder later) are not checked, and the
+human-readable `audit.log` is a copy that nothing vouches for: read `audit.jsonl`.
 
 ## Trusted timestamp (RFC 3161)
 
@@ -146,7 +180,7 @@ flowchart LR
 
 | 27037 principle / activity | How RV PDFAuth supports it |
 | --- | --- |
-| Auditability (5.3.2) | Every action logged with actor, UTC time and chain hash |
+| Auditability (5.3.2) | Every action logged with actor, UTC time and chain hash; `verify-log` checks the chain and re-hashes every output the log records |
 | Repeatability (5.3.3) | `environment.json` records exact tool and dependency versions; same input → same hashes |
 | Reproducibility (5.3.4) | Independent verifier (`tests/verify_chain.py`) and standard algorithms |
 | Justifiability (5.3.5) | Every finding states what it shows and what it does **not** prove; limitations in every report |

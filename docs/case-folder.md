@@ -198,11 +198,14 @@ flowchart TB
     E -- no --> X
     E -- yes --> F{"case_linked → run_started<br/>and run_finished → final audit entry?"}
     F -- no --> X
-    F -- yes --> OK["OK (exit 0)<br/>warnings: runs without run_finished"]
+    F -- yes --> R{"every output the run's<br/>audit.jsonl records unchanged?"}
+    R -- no --> X
+    R -- yes --> OK["OK (exit 0)<br/>warnings: runs without run_finished"]
 ```
 
 1. `rv-pdfauth verify-case <CASE>` (rv-hashinv has the same command; they agree). Exit 0 = intact, 3 = broken,
    1 = not a case folder. Only `timestamp_obtained` may follow a run's recorded final entry (a delayed timestamp).
+   Every output file a run's audit log records (reports, `hashes.csv`, `environment.json`, revisions and other analysis outputs) is re-hashed: an edited, deleted or replaced output is exit 3, named as `run <RUN-ID>: output reports/…`.
 2. Independently of any Rakvor binary: `python tests/verify_chain.py <CASE>/runs/<tool>/<RUN-ID>/logs` re-checks a
    run; the case log uses the same chain rule, and `sha256sum evidence/registry.json` must equal the last
    `registry_sha256` in `case-log.jsonl`.

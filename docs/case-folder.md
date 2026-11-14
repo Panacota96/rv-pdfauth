@@ -207,7 +207,8 @@ flowchart TB
    1 = not a case folder. Only `timestamp_obtained` may follow a run's recorded final entry (a delayed timestamp).
    Every output file a run's audit log records (reports, `hashes.csv`, `environment.json`, revisions and other analysis outputs) is re-hashed: an edited, deleted or replaced output is exit 3, named as `run <RUN-ID>: output reports/…`.
 2. Independently of any Rakvor binary: `python tests/verify_chain.py <CASE>/runs/<tool>/<RUN-ID>/logs` re-checks a
-   run; the case log uses the same chain rule, and `sha256sum evidence/registry.json` must equal the last
+   run (chain, hash register and every output its audit log records); the case log uses the same chain rule, and
+   `sha256sum evidence/registry.json` must equal the last
    `registry_sha256` in `case-log.jsonl`.
 3. Re-hash the evidence with any tool and compare it with `evidence/registry.csv`.
 4. `python tests/validate_reports.py <CASE>` validates `case.json`, `registry.json` and every JSON report against

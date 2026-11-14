@@ -515,7 +515,7 @@ Owners: **Eng.** = engineering (tool), **Counsel**, **Examiner**, **Firm** = Rak
 7. **The run is complete**: the audit log ends with `run_finished` (not `run_failed` / `run_cancelled`), and
    `rv-pdfauth verify-log <log folder>` prints `OK`.
 8. **Independent chain check**: `python tests/verify_chain.py <log folder>` exits 0 (it also re-hashes the evidence
-   listed in `hashes.csv`).
+   listed in `hashes.csv` and every output the audit log records).
 9. **Timestamp**: `timestamp_obtained` is present (or obtained later with `rv-pdfauth timestamp`),
    `rv-pdfauth verify-log <log folder> --tsa-ca <TSA roots>` reports *chain validated*, and the token was
    cross-checked with OpenSSL (a signature/chain check only): `openssl ts -verify -digest <head> -in

@@ -844,7 +844,7 @@ head to the examiner's key; the head can also be recorded in the case management
 ends with `run_finished` (or `run_failed` / `run_cancelled`).
 
 Independent check: [tests/verify_chain.py](../tests/verify_chain.py) re-implements the chain in Python and
-re-hashes the evidence listed in `hashes.csv`.
+re-hashes the evidence listed in `hashes.csv` and every output the audit log records.
 
 ## B15 RFC 3161 trusted timestamp
 

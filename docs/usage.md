@@ -364,7 +364,7 @@ verifies it. Files the run did not record (anything added to the folder later) a
 | Step | Command | Proves |
 | --- | --- | --- |
 | 1 | `rv-pdfauth verify-log <log> [--tsa-ca <bundle>]` (exit 0 intact, 3 broken or an output changed) | No entry edited, deleted or reordered; timestamp token matches the head it covers and carries a valid TSA signature (and chain, with `--tsa-ca`); every recorded output still has its digest (`outputs:` line) |
-| 2 | `python tests/verify_chain.py <log>` (source tree) | Same, with an independent implementation; also re-hashes the evidence listed in `hashes.csv` |
+| 2 | `python tests/verify_chain.py <log>` (source tree) | Same, with an independent implementation; also re-hashes the evidence listed in `hashes.csv` and every output the audit log records |
 | 3 | OpenSSL ([Timestamps](#6-timestamps)) | The TSA really signed that head at that time |
 | 4 | Step 1 (`outputs:` line); script below for an independent check | Every report and output file still has the digest recorded in the log |
 | 5 | Compare `hashes.csv` with the intake registry ([2.1](#21-intake-with-rv-hashinv-into-a-case-folder)) | The analysed files are the registered evidence |

@@ -5,6 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Entries are generated from
 [Conventional Commits](https://www.conventionalcommits.org/) by release-please and reviewed by a human.
 
+## [0.4.2](https://github.com/Panacota96/rv-pdfauth/compare/v0.4.1...v0.4.2) (2026-11-14)
+
+
+### Bug Fixes
+
+* **cli:** verify-log re-hashes the outputs the log records ([d7b61ae](https://github.com/Panacota96/rv-pdfauth/commit/d7b61ae1d8d0c04927cf6056776bdbb2196de8fc))
+* **core:** late audit entries and redirected run folders cannot hide an edited output ([0fab54a](https://github.com/Panacota96/rv-pdfauth/commit/0fab54a572aef7ff830bffb760f69f859278c496))
+* **core:** re-hash recorded outputs in verify-case ([6076a57](https://github.com/Panacota96/rv-pdfauth/commit/6076a576c24d9060143ebcf5e7feeee99dd812a8))
+* verify-log and verify-case re-hash the outputs the audit log records ([6ab9807](https://github.com/Panacota96/rv-pdfauth/commit/6ab9807fdb7e40750fca4778b068e1ef5c1d4dbd))
+
 ## [0.4.1](https://github.com/Panacota96/rv-pdfauth/compare/v0.4.0...v0.4.1) (2026-11-10)
 
 

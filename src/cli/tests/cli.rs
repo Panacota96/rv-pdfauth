@@ -202,6 +202,71 @@ fn bulk_scan_writes_reports_logs_and_verifiable_chain() {
         .code(0)
         .stdout(predicate::str::contains("chain intact"));
 
+    // Every output the log records is re-hashed, the analysis outputs (output_written with `hashes`)
+    // included: an edited report, an edited analysis output or a deleted file is a problem (exit 3).
+    let ok = bin().arg("verify-log").arg(&logs).assert().code(0);
+    let text = String::from_utf8_lossy(&ok.get_output().stdout).into_owned();
+    let line = text
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("outputs: "))
+        .expect("outputs line");
+    let (verified, rest) = line.split_once(" verified of ").unwrap();
+    assert_eq!(
+        rest,
+        format!("{} recorded (blake3, sha256)", verified),
+        "every recorded output verified, none skipped"
+    );
+    let audit: Vec<serde_json::Value> = std::fs::read_to_string(logs.join("audit.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let analysis: Vec<String> = audit
+        .iter()
+        .filter(|e| e["action"] == "output_written" && e["details"]["hashes"].is_object())
+        .map(|e| e["details"]["file"].as_str().unwrap().to_string())
+        .collect();
+    assert!(!analysis.is_empty(), "the sample writes analysis outputs");
+    assert!(
+        verified.parse::<usize>().unwrap() > 7 * 3 + analysis.len(),
+        "{}",
+        line
+    );
+    let output = reports.join(&analysis[0]);
+    let saved_output = std::fs::read(&output).unwrap();
+    std::fs::write(&output, b"edited").unwrap();
+    let item = std::fs::read_dir(reports.join("items"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .into_owned();
+    let technical = reports.join("items").join(&item).join("technical.json");
+    let saved = std::fs::read(&technical).unwrap();
+    std::fs::write(&technical, b"{\"edited\": true}\n").unwrap();
+    let stats = reports.join("statistics.json");
+    std::fs::rename(&stats, out.path().join("moved.json")).unwrap();
+    bin().arg("verify-log").arg(&logs).assert().code(3).stdout(
+        predicate::str::contains(format!(
+            "output reports/items/{}/technical.json: blake3 differs from audit entry #",
+            item
+        ))
+        .and(predicate::str::contains(format!(
+            "output reports/{}: blake3 differs from audit entry #",
+            analysis[0]
+        )))
+        .and(predicate::str::contains(
+            "output reports/statistics.json: missing",
+        ))
+        .and(predicate::str::contains("1 missing, 2 changed")),
+    );
+    std::fs::write(&technical, saved).unwrap();
+    std::fs::write(&output, saved_output).unwrap();
+    std::fs::rename(out.path().join("moved.json"), &stats).unwrap();
+    bin().arg("verify-log").arg(&logs).assert().code(0);
+
     // Tampering with one entry is detected.
     let p = logs.join("audit.jsonl");
     let text = std::fs::read_to_string(&p).unwrap();
@@ -700,14 +765,24 @@ fn case_folder_analysis_verify_case_and_tampering() {
     let item = only_dir(&run_dir.join("reports/items"));
     let custody = std::fs::read_to_string(item.join("custody.fr.html")).unwrap();
     assert!(custody.contains("E000") && custody.contains("CASE-1"));
+    bin().arg("verify-case").arg(&case).assert().code(0).stdout(
+        predicate::str::contains("2 registered items, 2 runs verified").and(
+            predicate::str::is_match(r"outputs: [1-9]\d* verified of [1-9]\d* recorded").unwrap(),
+        ),
+    );
+    // verify-case re-hashes every run's recorded outputs: an edited report is named, exit 3.
+    let stats = run_dir.join("reports/statistics.json");
+    let saved = std::fs::read(&stats).unwrap();
+    std::fs::write(&stats, b"{}\n").unwrap();
     bin()
         .arg("verify-case")
         .arg(&case)
         .assert()
-        .code(0)
+        .code(3)
         .stdout(predicate::str::contains(
-            "2 registered items, 2 runs verified",
+            "output reports/statistics.json: md5 differs from audit entry #",
         ));
+    std::fs::write(&stats, saved).unwrap();
     // The case id may be left out once the case exists; no input = every registered item.
     case_analyze(&case)
         .assert()

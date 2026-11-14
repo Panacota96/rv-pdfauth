@@ -342,18 +342,36 @@ evidence copy:
 rv-pdfauth verify-log D:\cases\CASE-2026-014\rv-pdfauth\logs\20261021T103903Z-67d213
 # OK  63 entries, chain intact: …\audit.jsonl
 #     timestamp 2026-10-21T10:39:08Z by http://timestamp.digicert.com covers entry #60
+#     outputs: 170 verified of 171 recorded (md5, sha256), 1 skipped
+#     not re-hashed: logs/timestamp-00060.tsr (RFC 3161 token: checked by the timestamp verification)
 ```
+
+The `outputs:` line is the re-hash of every file the log says the run wrote (item reports, statistics, revisions, visual diffs, `objects.json`, embedded files, `warnings.json`, `hashes.csv`,
+`environment.json`), with every algorithm the log recorded; the latest entry for a file wins. A file edited, deleted
+or replaced after the run makes the run `BROKEN` (exit 3) and is named:
+
+```text
+BROKEN  …\audit.jsonl
+  - output reports/items/00003-edited-incremental.pdf/revisions/rev-01.pdf: md5 differs from audit entry #20 (recorded 3888…, now 88f4…): edited or replaced after the run
+  - output reports/statistics.en.pdf: missing (recorded by audit entry #69): deleted or moved after the run
+    outputs: 168 verified of 171 recorded (md5, sha256), 1 missing, 1 changed, 1 skipped
+```
+
+A recorded path that is absolute, contains `..`, or resolves outside the run folder through a symlink or junction is
+rejected and never read. The timestamp token is listed as `not re-hashed` because the timestamp check already
+verifies it. Files the run did not record (anything added to the folder later) are not checked.
 
 | Step | Command | Proves |
 | --- | --- | --- |
-| 1 | `rv-pdfauth verify-log <log> [--tsa-ca <bundle>]` (exit 0 intact, 3 broken) | No entry edited, deleted or reordered; timestamp token matches the head it covers and carries a valid TSA signature (and chain, with `--tsa-ca`) |
+| 1 | `rv-pdfauth verify-log <log> [--tsa-ca <bundle>]` (exit 0 intact, 3 broken or an output changed) | No entry edited, deleted or reordered; timestamp token matches the head it covers and carries a valid TSA signature (and chain, with `--tsa-ca`); every recorded output still has its digest (`outputs:` line) |
 | 2 | `python tests/verify_chain.py <log>` (source tree) | Same, with an independent implementation; also re-hashes the evidence listed in `hashes.csv` |
 | 3 | OpenSSL ([Timestamps](#6-timestamps)) | The TSA really signed that head at that time |
-| 4 | Script below | Every report and output file still has the digest recorded in the log |
+| 4 | Step 1 (`outputs:` line); script below for an independent check | Every report and output file still has the digest recorded in the log |
 | 5 | Compare `hashes.csv` with the intake registry ([2.1](#21-intake-with-rv-hashinv-into-a-case-folder)) | The analysed files are the registered evidence |
 
-Step 4 (no built-in command yet, gap G19) — re-hash every file the run recorded (needs `sha256` among the run's
-algorithms):
+Step 4 is built into `verify-log` and `verify-case`. To check it with code you can read in one screen (an
+independent implementation, e.g. for an opposing expert), re-hash every file the run recorded (needs
+`sha256` among the run's algorithms):
 
 ```bash
 python - "<OUT>/logs/<RUN-ID>" "<OUT>/reports/<RUN-ID>" <<'EOF'

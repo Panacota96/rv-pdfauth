@@ -35,7 +35,7 @@ Verify with either implementation:
 
 ```bash
 rv-pdfauth verify-log rakvor-out/logs/<RUN-ID>          # exit 0 intact, 3 broken or an output changed
-python tests/verify_chain.py rakvor-out/logs/<RUN-ID>   # independent re-implementation
+python tests/verify_chain.py rakvor-out/logs/<RUN-ID>   # independent re-implementation (chain + hashes.csv + recorded outputs)
 ```
 
 > The chain proves the log is **internally consistent**. On its own it does not prove *when* it was written —

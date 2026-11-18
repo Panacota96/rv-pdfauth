@@ -1023,9 +1023,7 @@ fn u32s(v: &Value) -> Vec<u32> {
 }
 
 fn epoch(date: &str) -> Option<i64> {
-    chrono::DateTime::parse_from_rfc3339(date)
-        .ok()
-        .map(|d| d.timestamp())
+    rv_pdfauth_core::time::rfc3339_unix(date).ok()
 }
 
 impl ViewItem {

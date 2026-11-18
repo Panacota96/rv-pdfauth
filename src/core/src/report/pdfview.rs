@@ -158,15 +158,28 @@ impl Cur<'_> {
         }
         Some(v)
     }
+    /// An offset sign: `+`, `-` or U+2212 (MINUS SIGN, accepted by chrono in offsets). True for negative.
+    fn sign(&mut self) -> Option<bool> {
+        match self.peek()? {
+            b'+' => {
+                self.i += 1;
+                Some(false)
+            }
+            b'-' => {
+                self.i += 1;
+                Some(true)
+            }
+            _ if self.b[self.i..].starts_with("\u{2212}".as_bytes()) => {
+                self.i += "\u{2212}".len();
+                Some(true)
+            }
+            _ => None,
+        }
+    }
     /// `%:z`: optional spaces, sign, two-digit hours (< 24), optional `:`, two-digit minutes (< 60). Seconds east.
     fn offset(&mut self) -> Option<i64> {
         while self.eat(b' ') {}
-        let neg = match self.peek() {
-            Some(b'+') => false,
-            Some(b'-') => true,
-            _ => return None,
-        };
-        self.i += 1;
+        let neg = self.sign()?;
         let h = self.digits(2, 2)?;
         self.eat(b':');
         let m = self.digits(2, 2)?;
@@ -231,12 +244,7 @@ fn rfc3339(s: &str) -> Option<UtcTime> {
     let offset = if c.eat(b'Z') || c.eat(b'z') {
         0
     } else {
-        let neg = match c.peek()? {
-            b'+' => false,
-            b'-' => true,
-            _ => return None,
-        };
-        c.i += 1;
+        let neg = c.sign()?;
         let oh = c.digits(2, 2)?;
         c.eat(b':').then_some(())?;
         let om = c.digits(2, 2)?;
@@ -920,7 +928,7 @@ mod tests {
     use super::*;
 
     /// Date forms seen in PDF Info dictionaries (after normalisation) and XMP, plus edge and hostile inputs.
-    const GOLDEN_DATES: [&str; 64] = [
+    const GOLDEN_DATES: [&str; 69] = [
         "2026-10-01T10:00:00Z",
         "2026-10-01T12:00:00+02:00",
         "2026-10-01T12:00+02:00",
@@ -985,10 +993,15 @@ mod tests {
         "2026-10-01T10:00:00z",
         "2026-10-01T10:00:00ZZZ",
         "1-1-1",
+        "2026-11-15T10:00:00\u{2212}05:00",
+        "2026-11-15T10:00\u{2212}05:00",
+        "2026-11-15T10:00:00.5\u{2212}05:30",
+        "2026-11-15T10:00:00 \u{2212}05:00",
+        "2026-11-15T10:00:00\u{2212}0500",
     ];
 
     /// Frozen from chrono 0.4.45 (before the move to jiff): same instant, nanoseconds and report text, or none.
-    const GOLDEN_ROWS: [&str; 64] = [
+    const GOLDEN_ROWS: [&str; 69] = [
         "1790848800 0 2026-10-01T10:00:00Z",
         "1790848800 0 2026-10-01T10:00:00Z",
         "1790848800 0 2026-10-01T10:00:00Z",
@@ -1053,6 +1066,11 @@ mod tests {
         "1790848800 0 2026-10-01T10:00:00Z",
         "1790848800 0 2026-10-01T10:00:00Z",
         "-62135596800 0 0001-01-01T00:00:00Z",
+        "1794754800 0 2026-11-15T15:00:00Z",
+        "1794754800 0 2026-11-15T15:00:00Z",
+        "1794756600 500000000 2026-11-15T15:30:00Z",
+        "1794754800 0 2026-11-15T15:00:00Z",
+        "1794754800 0 2026-11-15T15:00:00Z",
     ];
 
     #[test]
@@ -1065,6 +1083,16 @@ mod tests {
             ("2026-10-01T10:00:00.9Z", "2026-10-01T10:00:02.1Z", 1),
             ("2026-10-01T10:00:02.1Z", "2026-10-01T10:00:00.9Z", -1),
             ("2026-10-01T10:00:00Z", "2026-10-02T10:00:00+01:00", 82800),
+            // leap seconds, frozen from chrono 0.4.45 (`DateTime - DateTime`, whole seconds toward zero)
+            ("2016-12-31T23:59:60Z", "2017-01-01T00:00:00Z", 0),
+            ("2017-01-01T00:00:00Z", "2016-12-31T23:59:60Z", 0),
+            ("2016-12-31T23:59:59Z", "2016-12-31T23:59:60Z", 1),
+            ("2016-12-31T23:59:60Z", "2016-12-31T23:59:59Z", -1),
+            ("2016-12-31T23:59:60.5Z", "2017-01-01T00:00:00.25Z", 0),
+            ("2016-12-31T23:59:58.5Z", "2016-12-31T23:59:60.25Z", 1),
+            ("2016-12-31T23:59:60Z", "2016-12-31T23:59:60.75Z", 0),
+            ("2016-12-31T23:59:60Z", "2017-01-02T00:00:00Z", 86400),
+            ("2015-06-30T23:59:60Z", "2016-12-31T23:59:60Z", 47520000),
         ] {
             assert_eq!((p(b) - p(a)).num_seconds(), want, "{a} -> {b}");
         }

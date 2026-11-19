@@ -5,6 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Entries are generated from
 [Conventional Commits](https://www.conventionalcommits.org/) by release-please and reviewed by a human.
 
+## [0.4.3](https://github.com/Panacota96/rv-pdfauth/compare/v0.4.2...v0.4.3) (2026-11-19)
+
+
+### Bug Fixes
+
+* **report:** accept the U+2212 minus in PDF/XMP date offsets again; chrono removed from this tool's own code (RUSTSEC-2026-0543, still used inside pdfium-render) ([e26420a](https://github.com/Panacota96/rv-pdfauth/commit/e26420a3c477c6aacabda002783d607716ed8a94))
+
 ## [0.4.2](https://github.com/Panacota96/rv-pdfauth/compare/v0.4.1...v0.4.2) (2026-11-14)
 
 

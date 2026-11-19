@@ -3447,7 +3447,6 @@ name = "rv-pdfauth-core"
 version = "0.1.0"
 dependencies = [
  "blake3",
- "chrono",
  "cms 0.2.3",
  "const-oid 0.9.6",
  "der 0.7.10",
@@ -3480,7 +3479,6 @@ dependencies = [
 name = "rv-pdfauth-gui"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "eframe",
  "png",
  "rfd",

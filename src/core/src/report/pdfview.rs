@@ -6,40 +6,338 @@
 
 use super::ItemResult;
 use crate::i18n::{Catalog, catalog, fill};
-use chrono::{DateTime, NaiveDate, NaiveDateTime, SecondsFormat, Utc};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
-/// Parses the date forms found in PDFs and XMP after normalisation: RFC 3339 with or without seconds,
-/// naive date-time (assumed UTC) and bare dates.
-pub fn parse_date(s: &str) -> Option<DateTime<Utc>> {
-    let s = s.trim();
-    if let Ok(d) = DateTime::parse_from_rfc3339(s) {
-        return Some(d.with_timezone(&Utc));
+/// A UTC instant: whole seconds since 1970 (floored) and nanoseconds past them. `nanos` ≥ 1 000 000 000 marks a
+/// leap second (`:60`), kept as written, as the PDF/XMP date had it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct UtcTime {
+    secs: i64,
+    nanos: u32,
+}
+
+/// The difference of two [`UtcTime`]s.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Interval(i128);
+
+impl Interval {
+    /// Whole seconds, truncated toward zero.
+    pub fn num_seconds(&self) -> i64 {
+        (self.0 / 1_000_000_000) as i64
     }
-    for f in ["%Y-%m-%dT%H:%M%:z", "%Y-%m-%dT%H:%M:%S%.f%:z"] {
-        if let Ok(d) = DateTime::parse_from_str(s, f) {
-            return Some(d.with_timezone(&Utc));
+}
+
+impl std::ops::Sub for UtcTime {
+    type Output = Interval;
+    fn sub(self, o: UtcTime) -> Interval {
+        Interval(
+            i128::from(self.secs - o.secs) * 1_000_000_000 + i128::from(self.nanos)
+                - i128::from(o.nanos),
+        )
+    }
+}
+
+impl UtcTime {
+    pub fn timestamp(&self) -> i64 {
+        self.secs
+    }
+    pub fn timestamp_subsec_nanos(&self) -> u32 {
+        self.nanos
+    }
+}
+
+/// Days since 1970-01-01 of a proleptic Gregorian date (H. Hinnant's `days_from_civil`).
+fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y.rem_euclid(400);
+    let mp = (i64::from(m) + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + i64::from(d) - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    (yoe + era * 400 + i64::from(m <= 2), m, d)
+}
+
+fn days_in_month(y: i64, m: u32) -> u32 {
+    let leap = y.rem_euclid(4) == 0 && (y.rem_euclid(100) != 0 || y.rem_euclid(400) == 0);
+    match m {
+        2 if leap => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    }
+}
+
+/// A byte cursor for the date grammars below.
+struct Cur<'a> {
+    b: &'a [u8],
+    i: usize,
+}
+
+impl Cur<'_> {
+    fn peek(&self) -> Option<u8> {
+        self.b.get(self.i).copied()
+    }
+    fn eat(&mut self, c: u8) -> bool {
+        if self.peek() == Some(c) {
+            self.i += 1;
+            true
+        } else {
+            false
+        }
+    }
+    fn end(&self) -> bool {
+        self.i == self.b.len()
+    }
+    /// `min..=max` ASCII digits (greedy up to `max`).
+    fn digits(&mut self, min: usize, max: usize) -> Option<u64> {
+        let n = self.b[self.i..]
+            .iter()
+            .take(max)
+            .take_while(|c| c.is_ascii_digit())
+            .count();
+        if n < min {
+            return None;
+        }
+        let v = self.b[self.i..self.i + n]
+            .iter()
+            .fold(0u64, |a, c| a * 10 + u64::from(c - b'0'));
+        self.i += n;
+        Some(v)
+    }
+    /// `%Y`: a sign and any number of digits, or 1 to 4 unsigned digits.
+    fn year(&mut self) -> Option<i64> {
+        let neg = match self.peek() {
+            Some(b'+') => {
+                self.i += 1;
+                false
+            }
+            Some(b'-') => {
+                self.i += 1;
+                true
+            }
+            _ => return self.digits(1, 4).map(|v| v as i64),
+        };
+        let v = self.digits(1, 9)? as i64;
+        Some(if neg { -v } else { v })
+    }
+    /// `.digits`: nanoseconds from the first nine digits; every digit is consumed.
+    fn fraction(&mut self) -> Option<u32> {
+        if !self.eat(b'.') {
+            return Some(0);
+        }
+        let start = self.i;
+        let n = self.b[self.i..]
+            .iter()
+            .take_while(|c| c.is_ascii_digit())
+            .count();
+        if n == 0 {
+            return None;
+        }
+        self.i += n;
+        let mut v = 0u32;
+        for k in 0..9 {
+            v = v * 10
+                + self
+                    .b
+                    .get(start + k)
+                    .filter(|c| k < n && c.is_ascii_digit())
+                    .map_or(0, |c| u32::from(c - b'0'));
+        }
+        Some(v)
+    }
+    /// An offset sign: `+`, `-` or U+2212 (MINUS SIGN, accepted by chrono in offsets). True for negative.
+    fn sign(&mut self) -> Option<bool> {
+        match self.peek()? {
+            b'+' => {
+                self.i += 1;
+                Some(false)
+            }
+            b'-' => {
+                self.i += 1;
+                Some(true)
+            }
+            _ if self.b[self.i..].starts_with("\u{2212}".as_bytes()) => {
+                self.i += "\u{2212}".len();
+                Some(true)
+            }
+            _ => None,
+        }
+    }
+    /// `%:z`: optional spaces, sign, two-digit hours (< 24), optional `:`, two-digit minutes (< 60). Seconds east.
+    fn offset(&mut self) -> Option<i64> {
+        while self.eat(b' ') {}
+        let neg = self.sign()?;
+        let h = self.digits(2, 2)?;
+        self.eat(b':');
+        let m = self.digits(2, 2)?;
+        if h >= 24 || m >= 60 {
+            return None;
+        }
+        let s = (h * 3600 + m * 60) as i64;
+        Some(if neg { -s } else { s })
+    }
+}
+
+/// Date and time fields to an instant; `None` when a field is out of range. `sec` 60 is a leap second.
+#[allow(clippy::too_many_arguments)]
+fn instant(
+    y: i64,
+    mo: u64,
+    d: u64,
+    h: u64,
+    mi: u64,
+    sec: u64,
+    nanos: u32,
+    offset: i64,
+) -> Option<UtcTime> {
+    if !(1..=12).contains(&mo)
+        || d == 0
+        || d > u64::from(days_in_month(y, mo as u32))
+        || h >= 24
+        || mi >= 60
+        || sec > 60
+    {
+        return None;
+    }
+    let (sec, nanos) = if sec == 60 {
+        (59, nanos + 1_000_000_000)
+    } else {
+        (sec, nanos)
+    };
+    let secs = days_from_civil(y, mo as u32, d as u32) * 86_400 + (h * 3600 + mi * 60 + sec) as i64
+        - offset;
+    Some(UtcTime { secs, nanos })
+}
+
+/// RFC 3339 `date-time`: four-digit year, two-digit fields, `T`/`t`/space, seconds, optional fraction,
+/// `Z`/`z` or `±hh:mm`.
+fn rfc3339(s: &str) -> Option<UtcTime> {
+    let mut c = Cur {
+        b: s.as_bytes(),
+        i: 0,
+    };
+    let y = c.digits(4, 4)? as i64;
+    c.eat(b'-').then_some(())?;
+    let mo = c.digits(2, 2)?;
+    c.eat(b'-').then_some(())?;
+    let d = c.digits(2, 2)?;
+    (c.eat(b'T') || c.eat(b't') || c.eat(b' ')).then_some(())?;
+    let h = c.digits(2, 2)?;
+    c.eat(b':').then_some(())?;
+    let mi = c.digits(2, 2)?;
+    c.eat(b':').then_some(())?;
+    let sec = c.digits(2, 2)?;
+    let nanos = c.fraction()?;
+    let offset = if c.eat(b'Z') || c.eat(b'z') {
+        0
+    } else {
+        let neg = c.sign()?;
+        let oh = c.digits(2, 2)?;
+        c.eat(b':').then_some(())?;
+        let om = c.digits(2, 2)?;
+        if oh >= 24 || om >= 60 {
+            return None;
+        }
+        let o = (oh * 3600 + om * 60) as i64;
+        if neg { -o } else { o }
+    };
+    c.end().then_some(())?;
+    instant(y, mo, d, h, mi, sec, nanos, offset)
+}
+
+/// `%Y-%m-%dT%H:%M[:%S[%.f]]` with an optional `%:z` (`offset`) or none, then the end of the text.
+fn fields(s: &str, seconds: bool, offset: bool) -> Option<UtcTime> {
+    let mut c = Cur {
+        b: s.as_bytes(),
+        i: 0,
+    };
+    let y = c.year()?;
+    c.eat(b'-').then_some(())?;
+    let mo = c.digits(1, 2)?;
+    c.eat(b'-').then_some(())?;
+    let d = c.digits(1, 2)?;
+    c.eat(b'T').then_some(())?;
+    let h = c.digits(1, 2)?;
+    c.eat(b':').then_some(())?;
+    let mi = c.digits(1, 2)?;
+    let (sec, nanos) = if seconds {
+        c.eat(b':').then_some(())?;
+        (c.digits(1, 2)?, c.fraction()?)
+    } else {
+        (0, 0)
+    };
+    let off = if offset { c.offset()? } else { 0 };
+    c.end().then_some(())?;
+    instant(y, mo, d, h, mi, sec, nanos, off)
+}
+
+/// `%Y-%m-%d`, midnight UTC.
+fn date_only(s: &str) -> Option<UtcTime> {
+    let mut c = Cur {
+        b: s.as_bytes(),
+        i: 0,
+    };
+    let y = c.year()?;
+    c.eat(b'-').then_some(())?;
+    let mo = c.digits(1, 2)?;
+    c.eat(b'-').then_some(())?;
+    let d = c.digits(1, 2)?;
+    c.end().then_some(())?;
+    instant(y, mo, d, 0, 0, 0, 0, 0)
+}
+
+/// Parses the date forms found in PDFs and XMP after normalisation: RFC 3339 with or without seconds,
+/// naive date-time (assumed UTC) and bare dates. The accepted forms and results are those of the chrono-based
+/// version this replaces (golden tests below).
+pub fn parse_date(s: &str) -> Option<UtcTime> {
+    let s = s.trim();
+    if let Some(d) = rfc3339(s) {
+        return Some(d);
+    }
+    for seconds in [false, true] {
+        if let Some(d) = fields(s, seconds, true) {
+            return Some(d);
         }
     }
     let t = s.trim_end_matches('Z');
-    for f in [
-        "%Y-%m-%dT%H:%M:%S%.f",
-        "%Y-%m-%dT%H:%M:%S",
-        "%Y-%m-%dT%H:%M",
-    ] {
-        if let Ok(d) = NaiveDateTime::parse_from_str(t, f) {
-            return Some(d.and_utc());
+    for seconds in [true, false] {
+        if let Some(d) = fields(t, seconds, false) {
+            return Some(d);
         }
     }
-    NaiveDate::parse_from_str(t, "%Y-%m-%d")
-        .ok()
-        .and_then(|d| d.and_hms_opt(0, 0, 0))
-        .map(|d| d.and_utc())
+    date_only(t)
 }
 
-fn iso(d: &DateTime<Utc>) -> String {
-    d.to_rfc3339_opts(SecondsFormat::Secs, true)
+/// RFC 3339 UTC to the second; a leap second shows as `:60`; years outside 0000–9999 carry a sign.
+fn iso(d: &UtcTime) -> String {
+    let (days, sod) = (d.secs.div_euclid(86_400), d.secs.rem_euclid(86_400));
+    let (y, m, dd) = civil_from_days(days);
+    let year = if (0..=9999).contains(&y) {
+        format!("{y:04}")
+    } else if y > 9999 {
+        format!("+{y}")
+    } else {
+        format!("-{:04}", -y)
+    };
+    let sec = sod % 60 + i64::from(d.nanos >= 1_000_000_000);
+    format!(
+        "{year}-{m:02}-{dd:02}T{:02}:{:02}:{sec:02}Z",
+        sod / 3600,
+        sod % 3600 / 60
+    )
 }
 
 fn is_pdf(it: &ItemResult) -> bool {
@@ -73,7 +371,7 @@ fn xmp_date(rev: &Value) -> Option<String> {
 }
 
 /// Creation time of the document: Info CreationDate of revision 1, else XMP CreateDate, else the first save.
-fn creation(revs: &[Value]) -> Option<DateTime<Utc>> {
+fn creation(revs: &[Value]) -> Option<UtcTime> {
     let r1 = revs.first()?;
     str_of(&r1["info"]["creation_date"]["utc"])
         .and_then(|s| parse_date(&s))
@@ -82,7 +380,7 @@ fn creation(revs: &[Value]) -> Option<DateTime<Utc>> {
 }
 
 /// The time a revision was saved, for intervals: Info date first (UTC), else XMP.
-fn saved_at(rev: &Value) -> Option<DateTime<Utc>> {
+fn saved_at(rev: &Value) -> Option<UtcTime> {
     info_date(rev)
         .and_then(|s| parse_date(&s))
         .or_else(|| xmp_date(rev).and_then(|s| parse_date(&s)))
@@ -98,7 +396,7 @@ fn creator(rev: &Value) -> Option<String> {
 
 /// Language-neutral revision rows.
 fn revision_rows(revs: &[Value]) -> Vec<Value> {
-    let mut prev: Option<DateTime<Utc>> = None;
+    let mut prev: Option<UtcTime> = None;
     revs.iter()
         .map(|r| {
             let at = saved_at(r);
@@ -394,7 +692,7 @@ pub fn pdf_view(c: &Catalog, it: &ItemResult) -> Value {
 
     // Timeline: positions follow the stored dates when every revision has one and they span time;
     // otherwise revisions are spaced evenly (and the note says so).
-    let times: Vec<Option<DateTime<Utc>>> = revs
+    let times: Vec<Option<UtcTime>> = revs
         .iter()
         .map(|r| str_of(&r["saved_at"]).and_then(|s| parse_date(&s)))
         .collect();
@@ -628,6 +926,212 @@ pub fn pdf_overview(items: &[ItemResult]) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Date forms seen in PDF Info dictionaries (after normalisation) and XMP, plus edge and hostile inputs.
+    const GOLDEN_DATES: [&str; 69] = [
+        "2026-10-01T10:00:00Z",
+        "2026-10-01T12:00:00+02:00",
+        "2026-10-01T12:00+02:00",
+        "2026-10-01T10:00:00",
+        "2026-10-01",
+        "yesterday",
+        "",
+        "   2026-10-01T10:00:00Z  ",
+        "2026-10-01T10:00:00.5Z",
+        "2026-10-01T10:00:00.123456789Z",
+        "2026-10-01T10:00:00.1234567891Z",
+        "2026-10-01T10:00:00.5+01:00",
+        "2026-10-01T10:00:00-05:30",
+        "2026-10-01T10:00-05:30",
+        "2026-10-01T10:00Z",
+        "2026-10-01T10:00",
+        "2026-10-01T10:00:00.25",
+        "2026-10-01T10:00:00ZZ",
+        "2026-10-01t10:00:00z",
+        "2026-10-01 10:00:00Z",
+        "2026-10-01 10:00:00",
+        "2026-10-01T10:00:00+0200",
+        "2026-10-01T10:00:00+02",
+        "2026-1-1T1:2:3Z",
+        "2026-01-01T01:02:03",
+        "2026-1-1",
+        "2026-02-29",
+        "2024-02-29T23:59:59Z",
+        "2016-12-31T23:59:60Z",
+        "2016-12-31T23:59:60",
+        "2026-10-01T24:00:00Z",
+        "2026-13-01T10:00:00Z",
+        "0001-01-01T00:00:00Z",
+        "9999-12-31T23:59:59Z",
+        "9999-12-31T23:59:59",
+        "9999-12-31",
+        "1969-12-31T23:59:59.75Z",
+        "1601-01-01",
+        "20261001100000Z",
+        "D:20261001100000Z",
+        "2026-10-01T10:00:00Z extra",
+        "2026-10-01T10:00:00+14:00",
+        "2026-10-01T10:00:00-23:59",
+        "+12026-10-01T10:00:00Z",
+        "2026-10-01T10:00:00.1234567891",
+        "2026-10-01T10:00:00.Z",
+        "2026-10-01T10:00.5Z",
+        "2026-001-01",
+        "02026-10-01",
+        "2026-10-1T10:00:00Z",
+        "2026-10-01T10:00:00+02:00Z",
+        "2026-10-01T10:00:00+2:00",
+        "2026-10-01T10:00:00+02:0",
+        "2026-10-01T10:00:00+24:00",
+        "-0001-01-01",
+        "2026-10-01T10:00:61",
+        "2026-10-01T10:60:00",
+        "2026-10-01T10:00:00.5",
+        "2026-10-01T10:00+0200",
+        "2026-10-01T10:00:00 +02:00",
+        "２０２６-10-01",
+        "2026-10-01T10:00:00z",
+        "2026-10-01T10:00:00ZZZ",
+        "1-1-1",
+        "2026-11-15T10:00:00\u{2212}05:00",
+        "2026-11-15T10:00\u{2212}05:00",
+        "2026-11-15T10:00:00.5\u{2212}05:30",
+        "2026-11-15T10:00:00 \u{2212}05:00",
+        "2026-11-15T10:00:00\u{2212}0500",
+    ];
+
+    /// Frozen from chrono 0.4.45 (before the move to jiff): same instant, nanoseconds and report text, or none.
+    const GOLDEN_ROWS: [&str; 69] = [
+        "1790848800 0 2026-10-01T10:00:00Z",
+        "1790848800 0 2026-10-01T10:00:00Z",
+        "1790848800 0 2026-10-01T10:00:00Z",
+        "1790848800 0 2026-10-01T10:00:00Z",
+        "1790812800 0 2026-10-01T00:00:00Z",
+        "none",
+        "none",
+        "1790848800 0 2026-10-01T10:00:00Z",
+        "1790848800 500000000 2026-10-01T10:00:00Z",
+        "1790848800 123456789 2026-10-01T10:00:00Z",
+        "1790848800 123456789 2026-10-01T10:00:00Z",
+        "1790845200 500000000 2026-10-01T09:00:00Z",
+        "1790868600 0 2026-10-01T15:30:00Z",
+        "1790868600 0 2026-10-01T15:30:00Z",
+        "1790848800 0 2026-10-01T10:00:00Z",
+        "1790848800 0 2026-10-01T10:00:00Z",
+        "1790848800 250000000 2026-10-01T10:00:00Z",
+        "1790848800 0 2026-10-01T10:00:00Z",
+        "1790848800 0 2026-10-01T10:00:00Z",
+        "1790848800 0 2026-10-01T10:00:00Z",
+        "none",
+        "1790841600 0 2026-10-01T08:00:00Z",
+        "none",
+        "1767229323 0 2026-01-01T01:02:03Z",
+        "1767229323 0 2026-01-01T01:02:03Z",
+        "1767225600 0 2026-01-01T00:00:00Z",
+        "none",
+        "1709251199 0 2024-02-29T23:59:59Z",
+        "1483228799 1000000000 2016-12-31T23:59:60Z",
+        "1483228799 1000000000 2016-12-31T23:59:60Z",
+        "none",
+        "none",
+        "-62135596800 0 0001-01-01T00:00:00Z",
+        "253402300799 0 9999-12-31T23:59:59Z",
+        "253402300799 0 9999-12-31T23:59:59Z",
+        "253402214400 0 9999-12-31T00:00:00Z",
+        "-1 750000000 1969-12-31T23:59:59Z",
+        "-11644473600 0 1601-01-01T00:00:00Z",
+        "none",
+        "none",
+        "none",
+        "1790798400 0 2026-09-30T20:00:00Z",
+        "1790935140 0 2026-10-02T09:59:00Z",
+        "317360368800 0 +12026-10-01T10:00:00Z",
+        "1790848800 123456789 2026-10-01T10:00:00Z",
+        "none",
+        "none",
+        "none",
+        "none",
+        "1790848800 0 2026-10-01T10:00:00Z",
+        "none",
+        "none",
+        "none",
+        "none",
+        "-62198755200 0 -0001-01-01T00:00:00Z",
+        "none",
+        "none",
+        "1790848800 500000000 2026-10-01T10:00:00Z",
+        "1790841600 0 2026-10-01T08:00:00Z",
+        "1790841600 0 2026-10-01T08:00:00Z",
+        "none",
+        "1790848800 0 2026-10-01T10:00:00Z",
+        "1790848800 0 2026-10-01T10:00:00Z",
+        "-62135596800 0 0001-01-01T00:00:00Z",
+        "1794754800 0 2026-11-15T15:00:00Z",
+        "1794754800 0 2026-11-15T15:00:00Z",
+        "1794756600 500000000 2026-11-15T15:30:00Z",
+        "1794754800 0 2026-11-15T15:00:00Z",
+        "1794754800 0 2026-11-15T15:00:00Z",
+    ];
+
+    #[test]
+    fn golden_dates_and_intervals() {
+        for (s, want) in GOLDEN_DATES.into_iter().zip(GOLDEN_ROWS) {
+            assert_eq!(golden_row(s), want, "{s:?}");
+        }
+        let p = |s| parse_date(s).unwrap();
+        for (a, b, want) in [
+            ("2026-10-01T10:00:00.9Z", "2026-10-01T10:00:02.1Z", 1),
+            ("2026-10-01T10:00:02.1Z", "2026-10-01T10:00:00.9Z", -1),
+            ("2026-10-01T10:00:00Z", "2026-10-02T10:00:00+01:00", 82800),
+            // leap seconds, frozen from chrono 0.4.45 (`DateTime - DateTime`, whole seconds toward zero)
+            ("2016-12-31T23:59:60Z", "2017-01-01T00:00:00Z", 0),
+            ("2017-01-01T00:00:00Z", "2016-12-31T23:59:60Z", 0),
+            ("2016-12-31T23:59:59Z", "2016-12-31T23:59:60Z", 1),
+            ("2016-12-31T23:59:60Z", "2016-12-31T23:59:59Z", -1),
+            ("2016-12-31T23:59:60.5Z", "2017-01-01T00:00:00.25Z", 0),
+            ("2016-12-31T23:59:58.5Z", "2016-12-31T23:59:60.25Z", 1),
+            ("2016-12-31T23:59:60Z", "2016-12-31T23:59:60.75Z", 0),
+            ("2016-12-31T23:59:60Z", "2017-01-02T00:00:00Z", 86400),
+            ("2015-06-30T23:59:60Z", "2016-12-31T23:59:60Z", 47520000),
+        ] {
+            assert_eq!((p(b) - p(a)).num_seconds(), want, "{a} -> {b}");
+        }
+    }
+
+    fn golden_row(s: &str) -> String {
+        match parse_date(s) {
+            Some(d) => format!(
+                "{} {} {}",
+                d.timestamp(),
+                d.timestamp_subsec_nanos(),
+                iso(&d)
+            ),
+            None => "none".into(),
+        }
+    }
+
+    /// Prints the golden values (run with `--ignored --nocapture` to regenerate them).
+    #[test]
+    #[ignore]
+    fn print_golden_dates() {
+        for s in GOLDEN_DATES {
+            println!("{:?} => {:?},", s, golden_row(s));
+        }
+        // intervals between revisions are whole seconds of (b - a), truncated toward zero
+        let p = |s| parse_date(s).unwrap();
+        for (a, b) in [
+            ("2026-10-01T10:00:00.9Z", "2026-10-01T10:00:02.1Z"),
+            ("2026-10-01T10:00:02.1Z", "2026-10-01T10:00:00.9Z"),
+            ("2026-10-01T10:00:00Z", "2026-10-02T10:00:00+01:00"),
+        ] {
+            println!(
+                "interval {:?} {:?} => {}",
+                a,
+                b,
+                (p(b) - p(a)).num_seconds()
+            );
+        }
+    }
 
     #[test]
     fn parses_pdf_and_xmp_date_forms() {

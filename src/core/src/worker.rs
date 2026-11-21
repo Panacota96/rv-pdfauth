@@ -701,6 +701,7 @@ mod tests {
             "hyper",
             "trust::",
             "request_timestamp",
+            "update::",
         ];
         let mut files: Vec<PathBuf> = [
             "worker.rs",
@@ -735,17 +736,32 @@ mod tests {
                 assert!(!text.contains(w), "{} depends on {}", manifest, w);
             }
         }
-        // ureq appears in the core only in trust.rs (parent side).
+        // ureq appears in the core only in trust.rs and update.rs (parent side: the RFC 3161 timestamp and the
+        // release check, which only the CLI's update-check and the GUI's main() call).
         for e in std::fs::read_dir(root.join("src")).unwrap() {
             let p = e.unwrap().path();
             if p.extension().is_some_and(|x| x == "rs")
-                && p.file_name().is_some_and(|n| n != "trust.rs")
+                && p.file_name()
+                    .is_some_and(|n| n != "trust.rs" && n != "update.rs")
             {
                 let text = std::fs::read_to_string(&p).unwrap();
                 let text = text.split("#[cfg(test)]").next().unwrap_or_default();
                 assert!(!text.contains("ureq"), "{} uses ureq", p.display());
             }
         }
+        // The GUI executable is also the worker (`<tool>-gui worker …`): its main() starts the release check only
+        // after the worker dispatch, so a worker child never runs it.
+        let gui = std::fs::read_to_string(root.join("../gui/src/main.rs")).unwrap();
+        let dispatch = gui
+            .find("worker_main()")
+            .expect("the GUI dispatches the worker");
+        let check = gui
+            .find("update::start_gui_check()")
+            .expect("the GUI starts the release check");
+        assert!(
+            check > dispatch,
+            "the GUI starts the release check before the worker dispatch"
+        );
     }
 
     #[test]

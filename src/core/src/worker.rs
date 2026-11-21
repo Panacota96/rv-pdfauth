@@ -749,6 +749,19 @@ mod tests {
                 assert!(!text.contains("ureq"), "{} uses ureq", p.display());
             }
         }
+        // The GUI executable is also the worker (`<tool>-gui worker …`): its main() starts the release check only
+        // after the worker dispatch, so a worker child never runs it.
+        let gui = std::fs::read_to_string(root.join("../gui/src/main.rs")).unwrap();
+        let dispatch = gui
+            .find("worker_main()")
+            .expect("the GUI dispatches the worker");
+        let check = gui
+            .find("update::start_gui_check()")
+            .expect("the GUI starts the release check");
+        assert!(
+            check > dispatch,
+            "the GUI starts the release check before the worker dispatch"
+        );
     }
 
     #[test]

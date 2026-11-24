@@ -7,7 +7,7 @@ members = ["src/pdf", "src/render", "src/core", "src/cli", "src/gui"]
 # does not change on release and `--locked` builds keep working.
 version = "0.1.0"
 edition = "2024"
-license = "LicenseRef-Rakvor-Audit"
+license = "PolyForm-Noncommercial-1.0.0"
 publish = false
 # Minimum supported Rust for the CLI, core, PDF and render crates: 1.88 (edition 2024 `let` chains, stable
 # since 1.88; every non-GUI dependency in Cargo.lock declares <= 1.85). The GUI crate overrides it to 1.95

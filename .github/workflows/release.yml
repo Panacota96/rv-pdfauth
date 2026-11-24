@@ -105,7 +105,7 @@ jobs:
         run: |
           $name = "rv-pdfauth-${{ steps.v.outputs.version }}-windows-x64"
           New-Item -ItemType Directory -Force dist\$name | Out-Null
-          Copy-Item target\release\rv-pdfauth.exe, target\release\rv-pdfauth-gui.exe, target\release\pdfium.dll, README.md, LICENSE, NOTICE, CHANGELOG.md dist\$name
+          Copy-Item target\release\rv-pdfauth.exe, target\release\rv-pdfauth-gui.exe, target\release\pdfium.dll, README.md, LICENSE, COMMERCIAL.md, NOTICE, CHANGELOG.md dist\$name
           New-Item -ItemType Directory -Force dist\$name\licenses\pdfium | Out-Null
           Copy-Item third_party\pdfium\win-x64\licenses\*, third_party\pdfium\win-x64\LICENSE-pdfium-binaries.txt dist\$name\licenses\pdfium
           Copy-Item -Recurse docs, examples dist\$name

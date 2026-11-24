@@ -5,6 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Entries are generated from
 [Conventional Commits](https://www.conventionalcommits.org/) by release-please and reviewed by a human.
 
+## [0.5.1](https://github.com/Panacota96/rv-pdfauth/compare/v0.5.0...v0.5.1) (2026-11-24)
+
+
+### Performance Improvements
+
+* **verify:** stream the audit log instead of holding every entry ([#24](https://github.com/Panacota96/rv-pdfauth/issues/24)) ([16f1f9d](https://github.com/Panacota96/rv-pdfauth/commit/16f1f9d1ce63ae8764718d5de2f690c3f9b13f65))
+
 ## [0.5.0](https://github.com/Panacota96/rv-pdfauth/compare/v0.4.3...v0.5.0) (2026-11-21)
 
 

@@ -5,6 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Entries are generated from
 [Conventional Commits](https://www.conventionalcommits.org/) by release-please and reviewed by a human.
 
+## [0.5.2](https://github.com/Panacota96/rv-pdfauth/compare/v0.5.1...v0.5.2) (2026-11-25)
+
+
+### Bug Fixes
+
+* **trust:** accept leap seconds only at 23:59:60; test imprint and nonce bounds ([#29](https://github.com/Panacota96/rv-pdfauth/issues/29)) ([19b7cf3](https://github.com/Panacota96/rv-pdfauth/commit/19b7cf3eb255b4bf29ba3a74f3900a1f2bbaa06f))
+* **trust:** reject malformed timestamp times instead of panicking; require the nonce ([#27](https://github.com/Panacota96/rv-pdfauth/issues/27)) ([72c4f1a](https://github.com/Panacota96/rv-pdfauth/commit/72c4f1aa62f92c4b94bbcf435cfdc1a20e3bc50c))
+
 ## [0.5.1](https://github.com/Panacota96/rv-pdfauth/compare/v0.5.0...v0.5.1) (2026-11-24)
 
 

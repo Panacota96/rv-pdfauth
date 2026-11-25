@@ -20,8 +20,12 @@
 
 ## 1. Purpose and how to read this page
 
-RV PDFAuth is used **locally** by Rakvor; it is not distributed. Clients, courts and opposing experts may audit
-it. Its results are **signals for an examiner, never a verdict** ([theory.md](theory.md#a1-what-the-tool-is-and-is-not)).
+RV PDFAuth is source-available under the PolyForm Noncommercial License 1.0.0 ([LICENSE](../LICENSE)): anyone,
+including a court, an opposing party or its expert, may inspect, build and run the exact version named in a
+report for non-commercial purposes. Commercial use needs a licence from Rakvor ([COMMERCIAL.md](../COMMERCIAL.md)).
+Rakvor's licensing texts are drafts pending legal review; whether a given use (for example a paid expert's
+review) counts as non-commercial is to be verified by counsel.
+Its results are **signals for an examiner, never a verdict** ([theory.md](theory.md#a1-what-the-tool-is-and-is-not)).
 Admissibility and weight are decided by a court about the **examiner's evidence**, of which the tool's output is
 one part. This page therefore separates three kinds of status:
 
@@ -73,7 +77,7 @@ content.
 | F14 | CI on Windows and Linux | [.github/workflows/ci.yml](../.github/workflows/ci.yml) |
 | F15 | SBOM and build provenance | [.github/workflows/release.yml](../.github/workflows/release.yml) (CycloneDX, `actions/attest-build-provenance`) |
 | F16 | Versioned releases with `SHA256SUMS` | [.github/workflows/release.yml](../.github/workflows/release.yml); [installation.md](installation.md#2-verify-the-download) |
-| F17 | Source auditable by customers and opposing experts; local use only | Repository access; [LICENSE](../LICENSE) is the Rakvor source-auditable licence (draft pending legal review, see G17) |
+| F17 | Source available to anyone, including courts and opposing experts, to inspect, build and run for non-commercial purposes (PolyForm Noncommercial 1.0.0) | [LICENSE](../LICENSE); [COMMERCIAL.md](../COMMERCIAL.md) (draft, to be verified by counsel); [NOTICE](../NOTICE) |
 | F18 | One-step intake by RV HashInv (`--intake hashinv`): the hash inventory and registry come from rv-hashinv itself; rv-pdfauth records which executable ran (path, version ≥ 0.3.0, SHA-256), its arguments, run id and exit code, and analyses nothing if it fails | [src/core/src/intake.rs](../src/core/src/intake.rs); `intake_delegated` in `audit.jsonl`; [case-folder.md](case-folder.md#one-step-intake-with-rv-hashinv) |
 
 Further features named below: **worker isolation** ([src/core/src/worker.rs](../src/core/src/worker.rs)),
@@ -133,7 +137,7 @@ experts use.
 | --- | --- | --- |
 | **Testability** — can the method be tested? | Deterministic outputs ([theory.md B17](theory.md#b17-determinism-and-reproducibility)); 7 synthetic samples with expected findings (F11); unit and integration tests run on Windows and Linux (F14); malformed-input tests (F13); byte-exact revisions anyone can re-derive with `head -c` or PowerShell ([theory.md B5](theory.md#b5-revision-extraction-byte-exact-prefixes)) | met |
 | **Known or potential error rate, and limits** | Every finding states what it does not prove (F8); 9 limitations in every report, plus item-specific ones such as `VISUAL_DIFF_UNAVAILABLE` (F9); thresholds published ([theory.md B1](theory.md#b1-source-map-and-constants)). **No measured false-positive / false-negative rates** on a labelled corpus (G5) | partial |
-| **Peer review / independent oracles** | Source auditable (F17); oracles pikepdf/qpdf and pyHanko (F12, CI); independent chain verifier in Python (CI); nightly fuzzing (F13); OpenSSL for timestamps. No publication or external review (G7) | partial |
+| **Peer review / independent oracles** | Source available for review (F17); oracles pikepdf/qpdf and pyHanko (F12, CI); independent chain verifier in Python (CI); nightly fuzzing (F13); OpenSSL for timestamps. No publication or external review (G7) | partial |
 | **Standards controlling the operation** | ISO 32000-1 file model for revisions; RFC 3161, RFC 5652, FIPS 180-4/202 for cryptography; release verification ([installation.md](installation.md)); examiner checklist (below). No enforced hash policy (G11); no formal SOP signed by the firm | partial |
 | **General acceptance** | Hashing and incremental-update analysis are standard practice; results agree with established parsers on the samples (F12). Acceptance of the producer-fingerprint method is not demonstrated (G5, G7) | partial |
 | **Validation for intended use** (17025 §7.2.2 [V]; ISO/IEC 27041 — to be verified) | Inputs exist (F10–F14) but there is **no per-release validation report** with plan, acceptance criteria, results and sign-off (G6) | gap |
@@ -168,7 +172,7 @@ normograma mirror (arts. 366–453).
 | CO-P14 | Perito examined on instruments, principles, methods, and "corroboración … por otros expertos" | Art. 417 [V] | F4, F9, F12, F17; [theory.md](theory.md); validation dossier missing (G6) | partial |
 | CO-P15 | Court weighs competence, acceptance of principles, instruments, consistency | Art. 420 [V] | F12, F16, F17; fingerprint-method acceptance not shown (G5, G7) | partial |
 | CO-P16 | Novel technique meets ≥ 1: verifiable; published and peer-reviewed; "se haya acreditado el nivel de confiabilidad"; academic acceptance | Art. 422 [V] | Verifiable: F11, F13, byte-exact revisions (criterion 1 met); reliability level not measured (G5); no publication (G7) | partial |
-| CO-P17 | Peritos have access to the EMP referred to in reports (enables opposing review) | Art. 416 [V] | F17 auditable source; F11 samples; F16 exact release; revisions/visual outputs hashed | met |
+| CO-P17 | Peritos have access to the EMP referred to in reports (enables opposing review) | Art. 416 [V] | F17 source available for review; F11 samples; F16 exact release; revisions/visual outputs hashed | met |
 | CO-P18 | Data messages are documents; authenticated by certification of a digital-signature entity or "informe de experto" | Art. 424 #7, art. 426 [V] | F6 (expert report); signature signals (`SIGNATURE_*`, `DOCMDP_VIOLATION`); trust chain not validated (G4) | met (expert route) |
 | CO-P19 | Documentary appraisal: "Que no haya sido alterado en su forma ni en su contenido" | Art. 432 #1 [V] | F2, F3; revision analysis, visual diff, F8 | met |
 | CO-P20 | Best evidence: the original is required where it is part of custody or a technical study | Arts. 433–434 parágrafo [V] | F1 preserves; hashed working copy | examiner (custody of the original) |
@@ -488,7 +492,7 @@ Owners: **Eng.** = engineering (tool), **Counsel**, **Examiner**, **Firm** = Rak
 | G14 | Moving legal references: CPP renumbering on 1 Jan. 2029 (ordonnance 2025-1091); Ley 527 art. 10 cites the repealed CPC | FR-P14, CO-L1 | Cite with the version date | Concordance table on this page | Counsel |
 | G15 | Scope: no imaging, live, cloud or mobile acquisition | ISO-11 | Declared; use dedicated acquisition tools | — | Examiner |
 | G16 | No ANSSI PRIS qualification (market positioning, not admissibility) | §5.5 | — | Optional roadmap item | Firm |
-| G17 | Source access offered without a defined protocol; `LICENSE` is the Rakvor source-auditable licence but still a draft not reviewed by a lawyer | CO-P17, FR-P11, CO-C5 | Provide the exact tagged source on request | Standard NDA and inspection protocol (escrow or supervised review); have counsel review and finalise the licence | Firm + Counsel |
+| G17 | Source access offered without a defined protocol; the licence wording (PolyForm Noncommercial 1.0.0 with Rakvor's Required Notice, and COMMERCIAL.md) is a draft pending legal review | CO-P17, FR-P11, CO-C5 | Provide the exact tagged source on request | Standard NDA and inspection protocol (escrow or supervised review); have counsel review and finalise the licence | Firm + Counsel |
 | G18 | `verify-log` checks the token's imprint, status, file digest and the TSA's CMS signature, and with `--tsa-ca` the certificate chain (closed in code); **not** revocation, policy OID or accuracy | EU-4, CO-L9 | `verify-log --tsa-ca <TSA roots>`, plus `openssl ts -verify` as a second signature/chain check; revocation established separately from CRL/OCSP evidence covering genTime (`openssl verify -crl_check` with that CRL, or rv-certcheck `--crl`/`--ocsp`) (checklist step 9) | Revocation (OCSP/CRL) and policy checks | Eng. |
 | G19 | Re-verification of the run's outputs against the digests in the audit log — **closed**: `verify-log` and `verify-case` re-hash every file the audit log records (reports, revisions and other analysis outputs, `hashes.csv`, `environment.json`) with every recorded algorithm; an edited, deleted or replaced output, or a recorded path leading outside the run folder, is a problem (exit 3) named in the output ([src/core/src/outputs.rs](../src/core/src/outputs.rs)). Files the run never recorded are not checked; kept for numbering | — | — | — | — |
 | G20 | The evidence is read twice (hash pass, then memory-mapped by the worker). **Closed in code:** the worker re-hashes the parsed bytes with the primary algorithm and compares (`evidence_rehash` in the audit; `EVIDENCE_CHANGED_DURING_ANALYSIS`, high, on a difference); residual: a change is detected, not prevented | CO-P5, ISO-7 | Analyse a write-protected copy only | — (keep in checklist) | Eng. |

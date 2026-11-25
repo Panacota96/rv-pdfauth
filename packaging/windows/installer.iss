@@ -46,6 +46,7 @@ Source: "{#SourceDir}\third_party\pdfium\win-x64\licenses\*"; DestDir: "{app}\li
 Source: "{#SourceDir}\third_party\pdfium\win-x64\LICENSE-pdfium-binaries.txt"; DestDir: "{app}\licenses\pdfium"
 Source: "{#SourceDir}\README.md"; DestDir: "{app}"
 Source: "{#SourceDir}\LICENSE"; DestDir: "{app}"
+Source: "{#SourceDir}\COMMERCIAL.md"; DestDir: "{app}"
 Source: "{#SourceDir}\NOTICE"; DestDir: "{app}"
 Source: "{#SourceDir}\CHANGELOG.md"; DestDir: "{app}"
 Source: "{#SourceDir}\docs\*"; DestDir: "{app}\docs"; Flags: recursesubdirs

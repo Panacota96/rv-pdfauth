@@ -44,7 +44,7 @@ Release assets on the GitHub Releases page of the repository (`Panacota96/rv-pdf
 
 | Asset | What it is |
 | --- | --- |
-| `rv-pdfauth-X.Y.Z-windows-x64.zip` | Portable: `rv-pdfauth.exe`, `rv-pdfauth-gui.exe`, `pdfium.dll`, `licenses/pdfium/`, README, LICENSE, NOTICE, CHANGELOG, `docs/`, `examples/` |
+| `rv-pdfauth-X.Y.Z-windows-x64.zip` | Portable: `rv-pdfauth.exe`, `rv-pdfauth-gui.exe`, `pdfium.dll`, `licenses/pdfium/`, README, LICENSE, COMMERCIAL.md, NOTICE, CHANGELOG, `docs/`, `examples/` |
 | `rv-pdfauth-X.Y.Z-windows-x64-setup.exe` | Inno Setup installer, per-user |
 | `SHA256SUMS` | SHA-256 of the zip, the installer and the SBOM (`sha256sum` format: `<hash>  ./<file>`) |
 | `sbom.cdx.json` | CycloneDX software bill of materials (every Rust dependency and version) |

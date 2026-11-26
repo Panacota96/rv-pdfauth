@@ -239,6 +239,8 @@ An offline run with the timestamp enabled still completes: it logs `timestamp_pe
 shows a warning. Later, on a machine that can reach the TSA, run `rv-pdfauth timestamp <log folder>` on the run's
 log folder (it re-verifies the chain, then appends `timestamp_obtained`). To use an internal or qualified TSA, pass
 `--tsa-url` (see [admissibility.md](admissibility.md#53-eidas--regulation-eu-9102014-as-amended-by-eu-20241183)).
+The timestamp is eIDAS-qualified only if the TSA address is that of a qualified trust service provider (QTSP) on an EU
+trusted list; the default address (DigiCert) is not one.
 The PDF worker has no network code. On Linux it also runs in an empty network namespace when the kernel permits it
 (recorded per item as `worker.network` in the audit log); on Windows there is no OS-level network block for it
 (gap G23): on an air-gapped workstation this does not matter; elsewhere a Windows Firewall outbound rule for

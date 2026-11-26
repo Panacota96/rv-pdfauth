@@ -281,15 +281,19 @@ EXAMPLES:
   Review the files listed in a text file, reports in the three languages, machine-readable progress:
     rv-pdfauth analyze --input-list files.txt --lang all --progress jsonl > events.jsonl
   Large batch: no visual comparison, reports only for flagged items, a case fingerprint database:
-    rv-pdfauth analyze -i E:\mailbox-export -r --visual-diff off --item-reports flagged \
-      --fingerprints-db case-014-fingerprints.json
+    rv-pdfauth analyze -i E:\mailbox-export -r --visual-diff off --item-reports flagged
+    --fingerprints-db case-014-fingerprints.json
   Verify the audit log afterwards:
-    rv-pdfauth verify-log rakvor-out/logs/<RUN-ID>/audit.jsonl
+    rv-pdfauth verify-log rakvor-out/logs/20261019T101500Z-a1b2c3
   Analyse every item registered in a case folder (after rv-hashinv intake), then verify the case:
     rv-pdfauth analyze --case-dir E:\CASE-014
     rv-pdfauth verify-case E:\CASE-014
   Analyse two registered items of the case only:
     rv-pdfauth analyze --case-dir E:\CASE-014 --evidence E0001,E0002
+  Offline lab: no timestamp request now; add it later with `rv-pdfauth timestamp <LOG>`:
+    rv-pdfauth analyze -i D:\evidence -r --no-timestamp
+  The summary starts with DONE, "DONE (high-severity findings)" (exit code 3) or CANCELLED,
+  then gives the counts, the timestamp status and the report and log folders.
 
 EXIT CODES:
   0    Completed; no high-severity finding.
@@ -386,9 +390,13 @@ DESCRIPTION:
   Nothing is ever sent anywhere: learning only reads the files you name.
 
 EXAMPLES:
-  rv-pdfauth fingerprints learn originals/*.pdf --label "Smallpdf" --category online_editor
-  rv-pdfauth fingerprints list --db local
-  rv-pdfauth fingerprints export --out lab-fingerprints-2026-10.json
+  Learn an online editor from two PDFs you made with it yourself:
+    rv-pdfauth fingerprints learn originals/smallpdf-1.pdf originals/smallpdf-2.pdf --label
+    "Smallpdf" --category online_editor
+  List what this workstation has learned (version and SHA-256 of the database):
+    rv-pdfauth fingerprints list --db local
+  Export the local database for another PC or for disclosure:
+    rv-pdfauth fingerprints export --out lab-fingerprints-2026-10.json
 ```
 
 ### rv-pdfauth fingerprints learn
@@ -447,8 +455,12 @@ FORENSIC NOTES:
   - The DB SHA-256 printed here appears in every report that used the database.
 
 EXAMPLES:
-  rv-pdfauth fingerprints learn made-with-ilovepdf.pdf --label "iLovePDF" --category online_editor
-  rv-pdfauth fingerprints learn a.pdf b.pdf --label "Scanner X" --category scanner --case LAB-01
+  Learn an online editor from one file you made with it:
+    rv-pdfauth fingerprints learn made-with-ilovepdf.pdf --label "iLovePDF" --category online_editor
+  Learn from two files, naming the case they come from and the examiner:
+    rv-pdfauth fingerprints learn a.pdf b.pdf --label "Scanner X" --category scanner --case LAB-01
+    --actor "Ana Ruiz"
+  The output names the entry and prints the database SHA-256 before and after.
 
 EXIT CODES:
   0  Learned (or merged); DB SHA-256 before/after printed.
@@ -473,8 +485,11 @@ Options:
           Print help (see a summary with '-h')
 
 EXAMPLES:
-  rv-pdfauth fingerprints list
-  rv-pdfauth fingerprints list --db local
+  Every database (bundled starter, local learned):
+    rv-pdfauth fingerprints list
+  Only the entries learned on this workstation, or only the bundled ones:
+    rv-pdfauth fingerprints list --db local
+    rv-pdfauth fingerprints list --db starter
 
 EXIT CODES:
   0  Listed.
@@ -503,8 +518,11 @@ Options:
           Print help (see a summary with '-h')
 
 EXAMPLES:
-  rv-pdfauth fingerprints export --out lab-fingerprints-2026-10.json
-  rv-pdfauth fingerprints export --db starter --out starter.json
+  Write the local database to a new file (an existing file is never overwritten):
+    rv-pdfauth fingerprints export --out lab-fingerprints-2026-11.json
+  Write the bundled starter database:
+    rv-pdfauth fingerprints export --db starter --out starter.json
+  The output prints the SHA-256 of the file written.
 
 EXIT CODES:
   0  Written; its SHA-256 is printed.
@@ -536,9 +554,15 @@ Options:
           Print help (see a summary with '-h')
 
 EXAMPLES:
-  rv-pdfauth verify-log rakvor-out/logs/20261019T101500Z-a1b2c3/audit.jsonl
-  rv-pdfauth verify-log rakvor-out/logs/20261019T101500Z-a1b2c3
-  rv-pdfauth verify-log rakvor-out/logs/20261019T101500Z-a1b2c3 --tsa-ca digicert-tsa-roots.pem
+  Verify a standalone run (its log folder, or the audit.jsonl in it):
+    rv-pdfauth verify-log rakvor-out/logs/20261019T101500Z-a1b2c3
+    rv-pdfauth verify-log rakvor-out/logs/20261019T101500Z-a1b2c3/audit.jsonl
+  Verify a run inside a case folder:
+    rv-pdfauth verify-log E:\CASE-014\runs\rv-pdfauth\20261019T101500Z-a1b2c3\logs
+  Also validate the TSA certificate chain against the TSA's own root certificates:
+    rv-pdfauth verify-log rakvor-out/logs/20261019T101500Z-a1b2c3 --tsa-ca digicert-tsa-roots.pem
+  An intact log prints "OK  <N> entries, chain intact", then the timestamp, truncation and
+  outputs lines; an altered one prints BROKEN and one line per problem (exit code 3).
 
 TIMESTAMP CHECKS:
   Driven by the log: every token a timestamp_obtained entry records must still be next to it
@@ -583,7 +607,8 @@ Options:
           Print help (see a summary with '-h')
 
 EXAMPLES:
-  rv-pdfauth self-test
+  Check this build before casework (one PASS or FAIL line per algorithm):
+    rv-pdfauth self-test
 
 EXIT CODES:
   0  All algorithms give the published answer for the input "abc".
@@ -618,8 +643,13 @@ Options:
           Print help (see a summary with '-h')
 
 EXAMPLES:
-  rv-pdfauth timestamp rakvor-out/logs/20261019T101500Z-a1b2c3
-  rv-pdfauth timestamp rakvor-out/logs/20261019T101500Z-a1b2c3 --tsa-url https://freetsa.org/tsr
+  The run was offline (timestamp_pending): add the timestamp once the network is back:
+    rv-pdfauth timestamp rakvor-out/logs/20261019T101500Z-a1b2c3
+  Use another RFC 3161 authority:
+    rv-pdfauth timestamp rakvor-out/logs/20261019T101500Z-a1b2c3 --tsa-url https://freetsa.org/tsr
+  Name the examiner in the new audit entry:
+    rv-pdfauth timestamp rakvor-out/logs/20261019T101500Z-a1b2c3 --actor "Ana Ruiz"
+  Success prints "OK  timestamp <TIME> by <TSA> covers entry #<N>"; then run verify-log.
 
 EXIT CODES:
   0  Timestamp obtained and logged.
@@ -655,7 +685,10 @@ CHECKS:
     replaced: a problem).
 
 EXAMPLES:
-  rv-pdfauth verify-case E:\CASE-014
+  Check the case log, the registry and every run of the case:
+    rv-pdfauth verify-case E:\CASE-014
+  An intact case prints "OK  case <ID>: ..." and an outputs line; a failed check prints
+  BROKEN and one line per problem (exit code 3).
 
 EXIT CODES:
   0  The case folder is intact (warnings, e.g. a run still in progress, are printed).
@@ -691,8 +724,10 @@ OFF SWITCH:
   %APPDATA%\Rakvor (RV Hub's setting), turns the check off for every Rakvor tool.
 
 EXAMPLES:
-  rv-pdfauth update-check
-  rv-pdfauth update-check --json
+  Ask whether a newer release is published (one line):
+    rv-pdfauth update-check
+  The same answer as JSON, for scripts:
+    rv-pdfauth update-check --json
 
 EXIT CODES:
   0  This is the latest release, or the check is turned off.
@@ -725,7 +760,8 @@ DESCRIPTION:
   gui_exe, exit_codes. Nothing is read or written; no audit log is created.
 
 EXAMPLES:
-  rv-pdfauth describe --json
+  Print the description that RV Hub reads:
+    rv-pdfauth describe --json
 
 EXIT CODES:
   0  The description was printed.

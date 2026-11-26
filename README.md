@@ -2,6 +2,8 @@
 
 # RV PDFAuth
 
+**English** · [Español](README.es.md) · [Français](README.fr.md)
+
 <!-- forge:description -->
 **Finds the signals of modification in PDF documents.** RV PDFAuth extracts every saved revision of a PDF, compares them visually, checks metadata, producer fingerprints, fonts, signatures and hidden content, and reports what each signal shows and what it does not prove.
 <!-- /forge:description -->
@@ -93,6 +95,7 @@ rv-pdfauth verify-log rakvor-out\logs\<RUN-ID>
 rv-pdfauth timestamp rakvor-out\logs\<RUN-ID>
 ```
 
+The common tasks, step by step: [docs/quick-guide.md](docs/quick-guide.md).
 Every option, example and exit code: [docs/usage-cli.md](docs/usage-cli.md) (generated from `--help`).
 The desktop app: [docs/usage-gui.md](docs/usage-gui.md). A ready-made sample: [examples/](examples/README.md).
 
@@ -129,6 +132,7 @@ flowchart TB
 
 | Page | For |
 | --- | --- |
+| [docs/quick-guide.md](docs/quick-guide.md) | The six common tasks (analyze, case folder, verify-log, verify-case, timestamp, fingerprints), every GUI button, exit codes |
 | [docs/theory.md](docs/theory.md) | Why each process works: plain-language part for clients, lawyers and judges; algorithms, thresholds and references for examiners and opposing experts |
 | [docs/admissibility.md](docs/admissibility.md) | Reliability argument and requirements of Colombia, France/EU, ISO and US/UK mapped to tool features, gap list, examiner checklist (for counsel review) |
 | [docs/installation.md](docs/installation.md) | Installing on Windows 10/11, verifying the release (SHA-256, provenance, Authenticode, PDFium), offline use, building from source |
@@ -142,6 +146,9 @@ flowchart TB
 | [docs/development.md](docs/development.md) | Building, testing, CI/CD and releasing |
 | [docs/release-process.md](docs/release-process.md) | Windows packages, code signing and GitHub releases, step by step |
 | [docs/adr/](docs/adr/) | Architecture decisions (e.g. why Rust) |
+
+The README, the quick guide, the usage guide, the desktop-app guide and the installation guide also exist in Spanish
+(`.es.md`) and French (`.fr.md`); the English pages are the reference.
 
 ## Project layout
 
@@ -158,6 +165,7 @@ rv-pdfauth/
 ├── schemas/       JSON Schemas of the three report kinds
 ├── docs/          documentation (Mermaid diagrams render on GitHub)
 ├── tests/         cross-language checks (Python verifier of the audit chain)
+├── scripts/       docs checks (translations keep the shape of the English pages)
 ├── examples/      sample evidence + run scripts + expected hashes
 ├── packaging/     Windows installer (Inno Setup)
 └── .github/       CI and release workflows

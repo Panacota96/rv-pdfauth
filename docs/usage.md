@@ -3,6 +3,7 @@
 This is the end-to-end guide for an examiner. It walks through one case, explains every output, says how to
 interpret each finding, and how to prove afterwards that nothing changed. Option lists are not repeated here:
 
+- the common tasks in short: [quick-guide.md](quick-guide.md);
 - every command, option, default, example and exit code: [usage-cli.md](usage-cli.md) (generated from `--help`);
 - the desktop app, window by window: [usage-gui.md](usage-gui.md);
 - why each check works: [theory.md](theory.md); legal weight: [admissibility.md](admissibility.md);
